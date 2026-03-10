@@ -1,0 +1,19 @@
+[project]
+name = "llmops-mock-deployment"
+version = "0.1.0"
+description = "Mock deployment dashboard for LLMOps Platform"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "pydantic>=2.5.0",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+select = ["E", "F", "I", "N", "W"]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]

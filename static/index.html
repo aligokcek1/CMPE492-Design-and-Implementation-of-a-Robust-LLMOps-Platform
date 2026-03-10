@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mock Deployment Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 min-h-screen flex items-center justify-center p-4">
+  <div class="bg-white rounded-xl shadow-lg p-8 max-w-md w-full">
+    <h1 class="text-2xl font-bold text-slate-800 mb-6">Deploy Model</h1>
+
+    <form id="deploy-form" class="space-y-4">
+      <div>
+        <label for="source-type" class="block text-sm font-medium text-slate-700 mb-1">Source Type</label>
+        <select id="source-type" name="source_type" class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+          <option value="local">Local</option>
+          <option value="huggingface">Hugging Face</option>
+        </select>
+      </div>
+      <div>
+        <label for="hardware" class="block text-sm font-medium text-slate-700 mb-1">Hardware</label>
+        <select id="hardware" name="hardware" class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+          <option value="gpu">GPU</option>
+          <option value="cpu">CPU</option>
+        </select>
+      </div>
+      <button type="submit" id="deploy-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition">
+        Deploy
+      </button>
+    </form>
+
+    <div id="status-area" class="mt-6 hidden">
+      <div class="flex items-center gap-2 text-slate-600">
+        <svg id="spinner" class="animate-spin h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span id="status-text" class="font-medium">Uploading...</span>
+      </div>
+      <p id="error-msg" class="mt-2 text-red-600 text-sm hidden"></p>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('deploy-form');
+    const statusArea = document.getElementById('status-area');
+    const statusText = document.getElementById('status-text');
+    const spinner = document.getElementById('spinner');
+    const errorMsg = document.getElementById('error-msg');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorMsg.classList.add('hidden');
+      statusArea.classList.remove('hidden');
+      statusText.textContent = 'Starting...';
+      spinner.classList.remove('hidden');
+
+      const sourceType = document.getElementById('source-type').value;
+      const hardware = document.getElementById('hardware').value;
+
+      try {
+        const res = await fetch('/deploy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source_type: sourceType, hardware })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          errorMsg.textContent = data.detail ? JSON.stringify(data.detail) : 'Deploy failed';
+          errorMsg.classList.remove('hidden');
+          spinner.classList.add('hidden');
+          return;
+        }
+
+        const jobId = data.job_id;
+        pollStatus(jobId);
+      } catch (err) {
+        errorMsg.textContent = err.message || 'Network error';
+        errorMsg.classList.remove('hidden');
+        spinner.classList.add('hidden');
+      }
+    });
+
+    function pollStatus(jobId) {
+      const interval = setInterval(async () => {
+        try {
+          const res = await fetch(`/status/${jobId}`);
+          const data = await res.json();
+
+          if (res.status === 404) {
+            clearInterval(interval);
+            statusText.textContent = 'Job not found';
+            errorMsg.textContent = 'Job not found (404)';
+            errorMsg.classList.remove('hidden');
+            spinner.classList.add('hidden');
+            return;
+          }
+
+          statusText.textContent = data.state;
+
+          if (data.state === 'Serving') {
+            clearInterval(interval);
+            spinner.classList.add('hidden');
+          }
+        } catch (err) {
+          clearInterval(interval);
+          errorMsg.textContent = err.message || 'Status fetch failed';
+          errorMsg.classList.remove('hidden');
+          spinner.classList.add('hidden');
+        }
+      }, 2000);
+    }
+  </script>
+</body>
+</html>
