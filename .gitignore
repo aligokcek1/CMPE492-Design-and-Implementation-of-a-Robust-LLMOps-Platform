@@ -12,3 +12,5 @@ htmlcov/
 *.log
 .env
 .env.*
+*.db
+local_cache.db
