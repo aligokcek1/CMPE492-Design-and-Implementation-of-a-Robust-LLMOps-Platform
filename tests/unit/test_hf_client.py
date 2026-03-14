@@ -79,3 +79,51 @@ def test_upload_local_file_repo_name_convention(mock_api):
     result = client.upload_local_file(file_obj, "model.bin", "gpt-2")
     assert result.startswith("testuser/inference-app-")
     assert "gpt-2" in result
+
+
+# --- T008b: 401/403 detection and token revocation (FR-008) ---
+
+
+def test_call_api_detects_401_and_raises_auth_error(mock_api):
+    """FR-008: A 401 response from any API call must surface as an AuthenticationError."""
+    from requests import HTTPError
+    from requests.models import Response
+
+    resp = Response()
+    resp.status_code = 401
+    mock_api.whoami.side_effect = HTTPError(response=resp)
+
+    client = HFClient("revoked_token")
+    with pytest.raises(Exception) as exc_info:
+        client.call_api_or_raise()
+    assert exc_info.value.is_auth_error
+
+
+def test_call_api_detects_403_and_raises_auth_error(mock_api):
+    """FR-008: A 403 response from any API call must surface as an AuthenticationError."""
+    from requests import HTTPError
+    from requests.models import Response
+
+    resp = Response()
+    resp.status_code = 403
+    mock_api.whoami.side_effect = HTTPError(response=resp)
+
+    client = HFClient("forbidden_token")
+    with pytest.raises(Exception) as exc_info:
+        client.call_api_or_raise()
+    assert exc_info.value.is_auth_error
+
+
+def test_call_api_non_auth_error_propagates_normally(mock_api):
+    """FR-008: Non-auth errors (e.g., 500) must not be wrapped as AuthenticationError."""
+    from requests import HTTPError
+    from requests.models import Response
+
+    resp = Response()
+    resp.status_code = 500
+    mock_api.whoami.side_effect = HTTPError(response=resp)
+
+    client = HFClient("token")
+    with pytest.raises(Exception) as exc_info:
+        client.call_api_or_raise()
+    assert not getattr(exc_info.value, "is_auth_error", False)

@@ -3,6 +3,8 @@
 Auto-generated from all feature plans. Last updated: 2026-03-14
 
 ## Active Technologies
+- Python 3.11+ + Streamlit, `huggingface_hub`, `python-dotenv`, `requests_oauthlib` (New) (003-hf-browser-login)
+- `.env` file (HF Token storage; overwritten dynamically via `dotenv.set_key`) (003-hf-browser-login)
 
 - Python 3.11+ + Streamlit (Frontend/App Server), `huggingface_hub` (HF API Client), `python-dotenv` (Config Management) (002-llm-hf-inference)
 
@@ -22,6 +24,7 @@ cd src [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECHNOLO
 Python 3.11+: Follow standard conventions
 
 ## Recent Changes
+- 003-hf-browser-login: Added Python 3.11+ + Streamlit, `huggingface_hub`, `python-dotenv`, `requests_oauthlib` (New)
 
 - 002-llm-hf-inference: Added Python 3.11+ + Streamlit (Frontend/App Server), `huggingface_hub` (HF API Client), `python-dotenv` (Config Management)
 

@@ -4,6 +4,20 @@ MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024  # 500 MB
 REPO_NAME_PREFIX = "inference-app-"
 
 
+class HFAuthenticationError(Exception):
+    """Raised when the HF API returns HTTP 401 or 403 (token revoked or expired)."""
+
+    is_auth_error = True
+
+
+def _extract_status_code(exc: Exception) -> int | None:
+    """Extract an HTTP status code from requests.HTTPError or huggingface_hub errors."""
+    response = getattr(exc, "response", None)
+    if response is not None:
+        return getattr(response, "status_code", None)
+    return None
+
+
 class HFClient:
     def __init__(self, token: str):
         self.token = token
@@ -40,6 +54,21 @@ class HFClient:
             return True
         except Exception:
             return False
+
+    def call_api_or_raise(self) -> dict:
+        """
+        Call whoami and raise HFAuthenticationError on HTTP 401/403 (FR-008).
+        Any other exception propagates normally.
+        Re-runs on a fresh API call to bypass the whoami cache.
+        """
+        try:
+            self._whoami_cache = None  # force a fresh call to detect current token state
+            return self._whoami()
+        except Exception as exc:
+            status = _extract_status_code(exc)
+            if status in (401, 403):
+                raise HFAuthenticationError(str(exc)) from exc
+            raise
 
     def upload_local_file(self, file_object, filename: str, target_repo_name: str) -> str:
         """

@@ -12,5 +12,6 @@ htmlcov/
 *.log
 .env
 .env.*
+.oauth_pending_state
 *.db
 local_cache.db
