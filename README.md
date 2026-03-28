@@ -1,2 +1,2 @@
-# CMPE492-Design-and-Implementation-of-a-Robust-LLMOps-Platform
+# CMPE492-Design-and-Implementation-of-a-Robust-LLMOps-Platform-with-SDD
 This project addresses two critical bottlenecks in modern AI engineering: the high cost of LLM infrastructure and the increasing complexity of AI-assisted codebases. By providing a CPU/GPU-agnostic deployment pipeline on GCP, we enable organizations to scale local models sustainably. Simultaneously, by specializing in Spec-Driven Development (SDD) via GitHub’s Spec-kit, we explore a future where the "Source of Truth" shifts from fragile code to robust, executable specifications.
