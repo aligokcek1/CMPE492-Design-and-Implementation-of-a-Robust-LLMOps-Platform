@@ -1,10 +1,10 @@
 # CMPE492-Design-and-Implementation-of-a-Robust-LLMOps-Platform Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-03-26
+Auto-generated from all feature plans. Last updated: 2026-04-07
 
 ## Active Technologies
-- Python 3.11 + Streamlit (Frontend), FastAPI (Backend), huggingface_hub (004-robust-model-upload)
-- N/A (Hugging Face Hub acts as storage) (004-robust-model-upload)
+- Python 3.11 (Backend + Frontend) + FastAPI, huggingface_hub ≥ 0.23.0, Streamlit, pydantic ≥ 2.7.0, pytest, pytest-asyncio, httpx (005-folder-upload-repo-deploy)
+- No new persistent storage — temp filesystem during upload only; HF Hub as the destination (005-folder-upload-repo-deploy)
 
 ## Project Structure
 
@@ -22,6 +22,7 @@ cd src && pytest && ruff check .
 Python 3.11 (Backend), Streamlit (Frontend): Follow standard conventions
 
 ## Recent Changes
+- 005-folder-upload-repo-deploy: Added Python 3.11 (Backend + Frontend) + FastAPI, huggingface_hub ≥ 0.23.0, Streamlit, pydantic ≥ 2.7.0, pytest, pytest-asyncio, httpx
 - 004-robust-model-upload: Added Python 3.11 + Streamlit (Frontend), FastAPI (Backend), huggingface_hub
 
 <!-- MANUAL ADDITIONS START -->
