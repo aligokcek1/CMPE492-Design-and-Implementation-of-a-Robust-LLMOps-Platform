@@ -1,5 +1,5 @@
 from pydantic import BaseModel, field_validator
-import re
+from datetime import datetime
 
 
 class HuggingFaceAuth(BaseModel):
@@ -20,3 +20,16 @@ class TokenVerifyRequest(BaseModel):
 
 class TokenVerifyResponse(BaseModel):
     username: str
+    session_token: str
+    expires_at: datetime
+    inactivity_timeout_seconds: int
+
+
+class SessionStatusResponse(BaseModel):
+    username: str
+    session_token: str
+    expires_at: datetime
+
+
+class LogoutResponse(BaseModel):
+    status: str = "logged_out"

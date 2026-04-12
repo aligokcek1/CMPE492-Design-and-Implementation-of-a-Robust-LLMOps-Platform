@@ -1,15 +1,25 @@
 import pytest
 from httpx import AsyncClient, ASGITransport
 from unittest.mock import patch, AsyncMock, MagicMock
+from datetime import UTC, datetime, timedelta
 
 from huggingface_hub.utils import RepositoryNotFoundError, HfHubHTTPError
 
 from src.main import app
+from src.services.session_store import session_store
 
 
 @pytest.fixture
 def transport():
     return ASGITransport(app=app)
+
+
+async def _session_auth_headers(client: AsyncClient) -> dict[str, str]:
+    with patch("src.api.auth.verify_hf_token", new_callable=AsyncMock) as mock_verify:
+        mock_verify.return_value = "test_user"
+        login = await client.post("/api/auth/verify", json={"token": "hf_valid_token"})
+    token = login.json()["session_token"]
+    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.mark.asyncio
@@ -21,9 +31,10 @@ async def test_list_models_success(transport):
     with patch("src.api.models.list_user_models", new_callable=AsyncMock) as mock_list:
         mock_list.return_value = mock_models
         async with AsyncClient(transport=transport, base_url="http://test") as client:
+            headers = await _session_auth_headers(client)
             response = await client.get(
                 "/api/models",
-                headers={"Authorization": "Bearer hf_valid_token"},
+                headers=headers,
             )
     assert response.status_code == 200
     data = response.json()
@@ -44,9 +55,10 @@ async def test_list_models_empty(transport):
     with patch("src.api.models.list_user_models", new_callable=AsyncMock) as mock_list:
         mock_list.return_value = []
         async with AsyncClient(transport=transport, base_url="http://test") as client:
+            headers = await _session_auth_headers(client)
             response = await client.get(
                 "/api/models",
-                headers={"Authorization": "Bearer hf_valid_token"},
+                headers=headers,
             )
     assert response.status_code == 200
     assert response.json() == []
@@ -67,10 +79,11 @@ async def test_get_public_model_success(transport):
     with patch("src.api.models.fetch_public_model_info", new_callable=AsyncMock) as mock_fetch:
         mock_fetch.return_value = mock_info
         async with AsyncClient(transport=transport, base_url="http://test") as client:
+            headers = await _session_auth_headers(client)
             response = await client.get(
                 "/api/models/public",
                 params={"repo_id": "google-bert/bert-base-uncased"},
-                headers={"Authorization": "Bearer hf_valid_token"},
+                headers=headers,
             )
     assert response.status_code == 200
     data = response.json()
@@ -95,10 +108,11 @@ async def test_get_public_model_not_found(transport):
     with patch("src.api.models.fetch_public_model_info", new_callable=AsyncMock) as mock_fetch:
         mock_fetch.side_effect = _make_repo_not_found_error()
         async with AsyncClient(transport=transport, base_url="http://test") as client:
+            headers = await _session_auth_headers(client)
             response = await client.get(
                 "/api/models/public",
                 params={"repo_id": "nonexistent/model"},
-                headers={"Authorization": "Bearer hf_valid_token"},
+                headers=headers,
             )
     assert response.status_code == 404
 
@@ -114,10 +128,11 @@ async def test_get_public_model_private(transport):
     with patch("src.api.models.fetch_public_model_info", new_callable=AsyncMock) as mock_fetch:
         mock_fetch.side_effect = HfHubHTTPError("Forbidden", response=mock_response)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
+            headers = await _session_auth_headers(client)
             response = await client.get(
                 "/api/models/public",
                 params={"repo_id": "private-user/private-model"},
-                headers={"Authorization": "Bearer hf_valid_token"},
+                headers=headers,
             )
     assert response.status_code == 403
 
@@ -128,10 +143,11 @@ async def test_get_public_model_private(transport):
 @pytest.mark.asyncio
 async def test_get_public_model_invalid_format(transport):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await _session_auth_headers(client)
         response = await client.get(
             "/api/models/public",
             params={"repo_id": "justname"},
-            headers={"Authorization": "Bearer hf_valid_token"},
+            headers=headers,
         )
     assert response.status_code == 400
 
@@ -147,3 +163,15 @@ async def test_get_public_model_missing_token(transport):
             params={"repo_id": "bert-base-uncased"},
         )
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_list_models_expired_session_returns_semantic_code(transport):
+    with patch("src.api.models.list_user_models", new_callable=AsyncMock):
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            headers = await _session_auth_headers(client)
+            session_token = headers["Authorization"].removeprefix("Bearer ")
+            session_store._sessions[session_token].expires_at = datetime.now(UTC) - timedelta(seconds=1)  # noqa: SLF001
+            response = await client.get("/api/models", headers=headers)
+    assert response.status_code == 401
+    assert response.json()["detail"]["code"] == "session_expired"

@@ -60,6 +60,7 @@ Expected outcome:
 Expected outcome:
 - Recovery path is direct.
 - User context (tab/selection/operation view) is preserved.
+- Backend returns structured auth error detail (e.g., `detail.code = session_expired`) that the UI uses for guided re-login messaging.
 
 ### 4) Upload/Deploy Continuity After Session End
 
@@ -81,6 +82,7 @@ Expected outcome:
 Expected outcome:
 - Same key + same payload returns original result, no duplicate execution.
 - Same key + different payload returns conflict.
+- Upload/deploy clients reuse the same idempotency key for one retry cycle after an auth interruption.
 
 ## API Contract
 

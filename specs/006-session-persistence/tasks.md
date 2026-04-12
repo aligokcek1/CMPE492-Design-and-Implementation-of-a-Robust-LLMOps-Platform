@@ -18,9 +18,9 @@
 
 **Purpose**: Prepare shared test scaffolding and request helpers for session-based auth rollout.
 
-- [ ] T001 [P] Add reusable backend session auth test fixtures in `backend/tests/contract/conftest.py`
-- [ ] T002 [P] Add frontend session-state test bootstrap helpers in `frontend/conftest.py`
-- [ ] T003 [P] Add idempotency-key test helper utilities in `backend/tests/contract/test_upload_api.py`
+- [X] T001 [P] Add reusable backend session auth test fixtures in `backend/tests/contract/conftest.py`
+- [X] T002 [P] Add frontend session-state test bootstrap helpers in `frontend/conftest.py`
+- [X] T003 [P] Add idempotency-key test helper utilities in `backend/tests/contract/test_upload_api.py`
 
 ---
 
@@ -30,12 +30,12 @@
 
 **⚠️ CRITICAL**: No user story implementation starts before this phase is complete.
 
-- [ ] T004 Define session-aware auth request/response models in `backend/src/models/auth.py`
-- [ ] T005 Implement in-memory session lifecycle store (`create/validate/touch/revoke`) in `backend/src/services/session_store.py`
-- [ ] T006 [P] Add shared session extraction dependency for protected routes in `backend/src/api/auth_helpers.py`
-- [ ] T007 Refactor protected route auth dependency usage in `backend/src/api/models.py`, `backend/src/api/upload.py`, and `backend/src/api/deployment.py`
-- [ ] T008 [P] Add frontend browser persistence helper for platform session token in `frontend/src/services/session_client.py`
-- [ ] T009 Refactor API client to send platform session token headers in `frontend/src/services/api_client.py`
+- [X] T004 Define session-aware auth request/response models in `backend/src/models/auth.py`
+- [X] T005 Implement in-memory session lifecycle store (`create/validate/touch/revoke`) in `backend/src/services/session_store.py`
+- [X] T006 [P] Add shared session extraction dependency for protected routes in `backend/src/api/auth_helpers.py`
+- [X] T007 Refactor protected route auth dependency usage in `backend/src/api/models.py`, `backend/src/api/upload.py`, and `backend/src/api/deployment.py`
+- [X] T008 [P] Add frontend browser persistence helper for platform session token in `frontend/src/services/session_client.py`
+- [X] T009 Refactor API client to send platform session token headers in `frontend/src/services/api_client.py`
 
 **Checkpoint**: Session primitives and shared auth path are ready for story-level delivery.
 
@@ -49,19 +49,19 @@
 
 ### Tests for User Story 1 (write first, must fail first) ⚠️
 
-- [ ] T010 [P] [US1] Add contract tests for session issue/renew/logout in `backend/tests/contract/test_auth_api.py`
-- [ ] T011 [P] [US1] Add contract tests for protected endpoint behavior with valid vs expired sessions in `backend/tests/contract/test_models_api.py`
-- [ ] T012 [P] [US1] Add frontend integration test for revisit persistence without re-login in `frontend/tests/integration/test_workflow.py`
+- [X] T010 [P] [US1] Add contract tests for session issue/renew/logout in `backend/tests/contract/test_auth_api.py`
+- [X] T011 [P] [US1] Add contract tests for protected endpoint behavior with valid vs expired sessions in `backend/tests/contract/test_models_api.py`
+- [X] T012 [P] [US1] Add frontend integration test for revisit persistence without re-login in `frontend/tests/integration/test_workflow.py`
 
 ### Implementation for User Story 1
 
-- [ ] T013 [US1] Implement session issuance response in `backend/src/api/auth.py`
-- [ ] T014 [US1] Implement session validation/renew endpoint in `backend/src/api/auth.py`
-- [ ] T015 [US1] Implement current-device logout endpoint in `backend/src/api/auth.py`
-- [ ] T016 [US1] Implement 24-hour sliding expiration touch logic and no-cap behavior in `backend/src/services/session_store.py`
-- [ ] T017 [US1] Implement login flow storing platform session token in `frontend/src/components/auth.py`
-- [ ] T018 [US1] Implement app startup session restore and auth gate in `frontend/src/app.py`
-- [ ] T019 [US1] Implement sign-out flow calling backend logout and clearing local session data in `frontend/src/app.py` and `frontend/src/services/api_client.py`
+- [X] T013 [US1] Implement session issuance response in `backend/src/api/auth.py`
+- [X] T014 [US1] Implement session validation/renew endpoint in `backend/src/api/auth.py`
+- [X] T015 [US1] Implement current-device logout endpoint in `backend/src/api/auth.py`
+- [X] T016 [US1] Implement 24-hour sliding expiration touch logic and no-cap behavior in `backend/src/services/session_store.py`
+- [X] T017 [US1] Implement login flow storing platform session token in `frontend/src/components/auth.py`
+- [X] T018 [US1] Implement app startup session restore and auth gate in `frontend/src/app.py`
+- [X] T019 [US1] Implement sign-out flow calling backend logout and clearing local session data in `frontend/src/app.py` and `frontend/src/services/api_client.py`
 
 **Checkpoint**: US1 is independently functional and demoable as MVP.
 
@@ -75,18 +75,18 @@
 
 ### Tests for User Story 2 (write first, must fail first) ⚠️
 
-- [ ] T020 [P] [US2] Add contract tests for upload continuity and idempotent retries in `backend/tests/contract/test_upload_api.py`
-- [ ] T021 [P] [US2] Add contract tests for deployment continuity and idempotent retries in `backend/tests/contract/test_deployment_api.py`
-- [ ] T022 [P] [US2] Add frontend integration test for retry-without-duplicate behavior in `frontend/tests/integration/test_workflow.py`
+- [X] T020 [P] [US2] Add contract tests for upload continuity and idempotent retries in `backend/tests/contract/test_upload_api.py`
+- [X] T021 [P] [US2] Add contract tests for deployment continuity and idempotent retries in `backend/tests/contract/test_deployment_api.py`
+- [X] T022 [P] [US2] Add frontend integration test for retry-without-duplicate behavior in `frontend/tests/integration/test_workflow.py`
 
 ### Implementation for User Story 2
 
-- [ ] T023 [US2] Implement operation receipt and idempotency tracking in `backend/src/services/session_store.py`
-- [ ] T024 [US2] Add `X-Idempotency-Key` handling and dedupe response replay in `backend/src/api/upload.py`
-- [ ] T025 [US2] Add `X-Idempotency-Key` handling and dedupe response replay in `backend/src/api/deployment.py`
-- [ ] T026 [US2] Ensure upload operations capture auth context at acceptance and continue after session end in `backend/src/api/upload.py` and `backend/src/services/huggingface.py`
-- [ ] T027 [US2] Ensure deployment operations capture auth context at acceptance and continue after session end in `backend/src/api/deployment.py` and `backend/src/services/mock_gcp.py`
-- [ ] T028 [US2] Send idempotency keys for upload/deploy requests in `frontend/src/services/api_client.py`, `frontend/src/components/upload.py`, and `frontend/src/components/deploy.py`
+- [X] T023 [US2] Implement operation receipt and idempotency tracking in `backend/src/services/session_store.py`
+- [X] T024 [US2] Add `X-Idempotency-Key` handling and dedupe response replay in `backend/src/api/upload.py`
+- [X] T025 [US2] Add `X-Idempotency-Key` handling and dedupe response replay in `backend/src/api/deployment.py`
+- [X] T026 [US2] Ensure upload operations capture auth context at acceptance and continue after session end in `backend/src/api/upload.py` and `backend/src/services/huggingface.py`
+- [X] T027 [US2] Ensure deployment operations capture auth context at acceptance and continue after session end in `backend/src/api/deployment.py` and `backend/src/services/mock_gcp.py`
+- [X] T028 [US2] Send idempotency keys for upload/deploy requests in `frontend/src/services/api_client.py`, `frontend/src/components/upload.py`, and `frontend/src/components/deploy.py`
 
 **Checkpoint**: US2 is independently functional with continuity and dedupe guarantees.
 
@@ -100,15 +100,15 @@
 
 ### Tests for User Story 3 (write first, must fail first) ⚠️
 
-- [ ] T029 [P] [US3] Add contract tests for explicit session-expired error semantics in `backend/tests/contract/test_auth_api.py` and `backend/tests/contract/test_models_api.py`
-- [ ] T030 [P] [US3] Add frontend integration test for expired-session prompt and context recovery in `frontend/tests/integration/test_workflow.py`
+- [X] T029 [P] [US3] Add contract tests for explicit session-expired error semantics in `backend/tests/contract/test_auth_api.py` and `backend/tests/contract/test_models_api.py`
+- [X] T030 [P] [US3] Add frontend integration test for expired-session prompt and context recovery in `frontend/tests/integration/test_workflow.py`
 
 ### Implementation for User Story 3
 
-- [ ] T031 [US3] Standardize expired-session error payloads for protected endpoints in `backend/src/api/auth_helpers.py` and `backend/src/api/errors.py`
-- [ ] T032 [US3] Implement pending action/context preservation on auth failures in `frontend/src/app.py`
-- [ ] T033 [US3] Implement guided re-login prompt and post-login resume behavior in `frontend/src/components/auth.py` and `frontend/src/app.py`
-- [ ] T034 [US3] Implement one-time safe retry policy after re-authentication in `frontend/src/services/api_client.py`
+- [X] T031 [US3] Standardize expired-session error payloads for protected endpoints in `backend/src/api/auth_helpers.py` and `backend/src/api/errors.py`
+- [X] T032 [US3] Implement pending action/context preservation on auth failures in `frontend/src/app.py`
+- [X] T033 [US3] Implement guided re-login prompt and post-login resume behavior in `frontend/src/components/auth.py` and `frontend/src/app.py`
+- [X] T034 [US3] Implement one-time safe retry policy after re-authentication in `frontend/src/services/api_client.py`
 
 **Checkpoint**: US3 is independently functional with smooth recovery UX.
 
@@ -118,10 +118,10 @@
 
 **Purpose**: Final consistency pass across stories and verification against contracts/quickstart.
 
-- [ ] T035 [P] Update/align API behavior documentation in `specs/006-session-persistence/contracts/api.yml` and `specs/006-session-persistence/quickstart.md`
-- [ ] T036 Run full backend contract suite and fix regressions in `backend/tests/contract/test_auth_api.py`, `backend/tests/contract/test_upload_api.py`, `backend/tests/contract/test_deployment_api.py`, and `backend/tests/contract/test_models_api.py`
-- [ ] T037 Run frontend integration suite and fix regressions in `frontend/tests/integration/test_workflow.py`
-- [ ] T038 [P] Run lint and cleanup touched backend/frontend files in `backend/src/` and `frontend/src/`
+- [X] T035 [P] Update/align API behavior documentation in `specs/006-session-persistence/contracts/api.yml` and `specs/006-session-persistence/quickstart.md`
+- [X] T036 Run full backend contract suite and fix regressions in `backend/tests/contract/test_auth_api.py`, `backend/tests/contract/test_upload_api.py`, `backend/tests/contract/test_deployment_api.py`, and `backend/tests/contract/test_models_api.py`
+- [X] T037 Run frontend integration suite and fix regressions in `frontend/tests/integration/test_workflow.py`
+- [X] T038 [P] Run lint and cleanup touched backend/frontend files in `backend/src/` and `frontend/src/`
 
 ---
 

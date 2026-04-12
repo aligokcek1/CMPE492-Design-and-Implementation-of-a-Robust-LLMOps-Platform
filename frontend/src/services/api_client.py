@@ -5,19 +5,26 @@ BACKEND_URL = "http://localhost:8000"
 
 
 class APIError(Exception):
-    def __init__(self, status_code: int, detail: str):
+    def __init__(self, status_code: int, detail: str, code: str | None = None):
         self.status_code = status_code
         self.detail = detail
+        self.code = code
         super().__init__(f"API error {status_code}: {detail}")
 
 
 def _raise_for_status(response: requests.Response) -> None:
     if not response.ok:
+        code = None
         try:
-            detail = response.json().get("detail", response.text)
+            raw_detail = response.json().get("detail", response.text)
+            if isinstance(raw_detail, dict):
+                code = raw_detail.get("code")
+                detail = str(raw_detail.get("message", response.text))
+            else:
+                detail = str(raw_detail)
         except Exception:
             detail = response.text
-        raise APIError(response.status_code, detail)
+        raise APIError(response.status_code, detail, code=code)
 
 
 def verify_token(token: str) -> dict[str, Any]:
@@ -30,7 +37,39 @@ def verify_token(token: str) -> dict[str, Any]:
     return response.json()
 
 
-def start_upload(token: str, repository_id: str, uploaded_files: list) -> dict[str, Any]:
+def get_session_status(session_token: str) -> dict[str, Any]:
+    response = requests.get(
+        f"{BACKEND_URL}/api/auth/session",
+        headers={"Authorization": f"Bearer {session_token}"},
+        timeout=15,
+    )
+    _raise_for_status(response)
+    return response.json()
+
+
+def logout(session_token: str) -> dict[str, Any]:
+    response = requests.post(
+        f"{BACKEND_URL}/api/auth/logout",
+        headers={"Authorization": f"Bearer {session_token}"},
+        timeout=15,
+    )
+    _raise_for_status(response)
+    return response.json()
+
+
+def _session_headers(session_token: str, idempotency_key: str | None = None) -> dict[str, str]:
+    headers = {"Authorization": f"Bearer {session_token}"}
+    if idempotency_key:
+        headers["X-Idempotency-Key"] = idempotency_key
+    return headers
+
+
+def start_upload(
+    session_token: str,
+    repository_id: str,
+    uploaded_files: list,
+    idempotency_key: str | None = None,
+) -> dict[str, Any]:
     """Send files as multipart form data.
 
     ``uploaded_files`` is a list of ``(filename, UploadedFile)`` tuples.
@@ -45,39 +84,44 @@ def start_upload(token: str, repository_id: str, uploaded_files: list) -> dict[s
         f"{BACKEND_URL}/api/upload/start",
         data={"repository_id": repository_id},
         files=multipart_files,
-        headers={"Authorization": f"Bearer {token}"},
+        headers=_session_headers(session_token, idempotency_key),
         timeout=300,
     )
     _raise_for_status(response)
     return response.json()
 
 
-def list_models(token: str) -> list[dict[str, Any]]:
+def list_models(session_token: str) -> list[dict[str, Any]]:
     response = requests.get(
         f"{BACKEND_URL}/api/models",
-        headers={"Authorization": f"Bearer {token}"},
+        headers=_session_headers(session_token),
         timeout=30,
     )
     _raise_for_status(response)
     return response.json()
 
 
-def fetch_public_model_info(token: str, repo_id: str) -> dict[str, Any]:
+def fetch_public_model_info(session_token: str, repo_id: str) -> dict[str, Any]:
     response = requests.get(
         f"{BACKEND_URL}/api/models/public",
         params={"repo_id": repo_id},
-        headers={"Authorization": f"Bearer {token}"},
+        headers=_session_headers(session_token),
         timeout=15,
     )
     _raise_for_status(response)
     return response.json()
 
 
-def mock_deploy(token: str, model_repository: str, resource_type: str) -> dict[str, Any]:
+def mock_deploy(
+    session_token: str,
+    model_repository: str,
+    resource_type: str,
+    idempotency_key: str | None = None,
+) -> dict[str, Any]:
     response = requests.post(
         f"{BACKEND_URL}/api/deployment/mock",
         json={"model_repository": model_repository, "resource_type": resource_type},
-        headers={"Authorization": f"Bearer {token}"},
+        headers=_session_headers(session_token, idempotency_key),
         timeout=60,
     )
     _raise_for_status(response)

@@ -73,6 +73,20 @@ paths:
                     format: date-time
         '401':
           description: Session missing, expired, or revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: session_expired
+                      message:
+                        type: string
+                        example: Session expired. Please sign in again.
 
   /api/auth/logout:
     post:
@@ -113,6 +127,18 @@ paths:
           description: Model list returned
         '401':
           description: Missing, expired, or invalid session
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detail:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
 
   /api/models/public:
     get:

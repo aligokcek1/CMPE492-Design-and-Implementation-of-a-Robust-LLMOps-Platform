@@ -1,10 +1,20 @@
 import streamlit as st
 from src.services.api_client import verify_token, APIError
+from src.services.session_client import set_session
 
 
 def render_login() -> None:
     """Render the Hugging Face login / token entry form."""
     st.header("Sign in with Hugging Face")
+    last_auth_error = st.session_state.get("last_auth_error")
+    pending_action = st.session_state.get("pending_action")
+    if last_auth_error:
+        st.warning(last_auth_error)
+    if pending_action:
+        st.info(
+            "After sign in, you can continue your previous action: "
+            f"`{pending_action.get('type', 'unknown')}`."
+        )
     st.markdown(
         "Enter a Hugging Face **write-access** token to authenticate. "
         "You can generate one at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)."
@@ -27,8 +37,13 @@ def render_login() -> None:
         with st.spinner("Verifying token…"):
             try:
                 result = verify_token(token.strip())
-                st.session_state["hf_token"] = token.strip()
-                st.session_state["hf_username"] = result["username"]
+                set_session(
+                    session_token=result["session_token"],
+                    username=result["username"],
+                    expires_at=result.get("expires_at"),
+                )
+                st.session_state.pop("last_auth_error", None)
+                st.session_state["reauth_completed"] = True
                 st.success(f"Authenticated as **{result['username']}**")
                 st.rerun()
             except APIError as exc:

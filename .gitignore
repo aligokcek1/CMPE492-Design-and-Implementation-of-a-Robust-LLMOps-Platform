@@ -12,3 +12,9 @@ htmlcov/
 .env
 .env.*
 .gemini
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+.idea/
