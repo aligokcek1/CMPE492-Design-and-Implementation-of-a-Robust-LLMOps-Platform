@@ -15,6 +15,14 @@ def _make_files(names: list[str]) -> list[tuple]:
     return [("files", (name, b"fake content", "application/octet-stream")) for name in names]
 
 
+async def _session_auth_headers(client: AsyncClient) -> dict[str, str]:
+    with patch("src.api.auth.verify_hf_token", new_callable=AsyncMock) as mock_verify:
+        mock_verify.return_value = "test_user"
+        login = await client.post("/api/auth/verify", json={"token": "hf_valid_token"})
+    token = login.json()["session_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
 # ---------------------------------------------------------------------------
 # T004: Multi-folder upload — two folder groups succeed
 # ---------------------------------------------------------------------------
@@ -27,11 +35,12 @@ async def test_upload_multi_folder_success(transport):
     with patch("src.api.upload.upload_model_folder", new_callable=AsyncMock) as mock_upload:
         mock_upload.return_value = folder_results
         async with AsyncClient(transport=transport, base_url="http://test") as client:
+            headers = await _session_auth_headers(client)
             response = await client.post(
                 "/api/upload/start",
                 data={"repository_id": "testuser/my-model"},
                 files=_make_files(["weights/model.bin", "tokenizer/vocab.json"]),
-                headers={"Authorization": "Bearer hf_valid_token"},
+                headers=headers,
             )
     assert response.status_code == 200
     data = response.json()
@@ -48,11 +57,12 @@ async def test_upload_multi_folder_success(transport):
 async def test_upload_path_traversal_rejected(transport):
     with patch("src.api.upload.upload_model_folder", new_callable=AsyncMock) as mock_upload:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
+            headers = await _session_auth_headers(client)
             response = await client.post(
                 "/api/upload/start",
                 data={"repository_id": "testuser/my-model"},
                 files=_make_files(["../../etc/passwd"]),
-                headers={"Authorization": "Bearer hf_valid_token"},
+                headers=headers,
             )
     assert response.status_code == 400
     mock_upload.assert_not_called()
@@ -69,11 +79,12 @@ async def test_upload_mixed_root_and_folder_files(transport):
     with patch("src.api.upload.upload_model_folder", new_callable=AsyncMock) as mock_upload:
         mock_upload.return_value = folder_results
         async with AsyncClient(transport=transport, base_url="http://test") as client:
+            headers = await _session_auth_headers(client)
             response = await client.post(
                 "/api/upload/start",
                 data={"repository_id": "testuser/my-model"},
                 files=_make_files(["weights/model.bin", "README.md"]),
-                headers={"Authorization": "Bearer hf_valid_token"},
+                headers=headers,
             )
     assert response.status_code == 200
     data = response.json()
@@ -88,11 +99,12 @@ async def test_upload_empty_folder_name_falls_back_to_root(transport):
     with patch("src.api.upload.upload_model_folder", new_callable=AsyncMock) as mock_upload:
         mock_upload.return_value = []
         async with AsyncClient(transport=transport, base_url="http://test") as client:
+            headers = await _session_auth_headers(client)
             response = await client.post(
                 "/api/upload/start",
                 data={"repository_id": "testuser/my-model"},
                 files=_make_files(["/file.bin"]),
-                headers={"Authorization": "Bearer hf_valid_token"},
+                headers=headers,
             )
     assert response.status_code == 200
 
@@ -105,11 +117,12 @@ async def test_upload_size_limit_exceeded(transport):
     with patch("src.api.upload.MAX_UPLOAD_BYTES", 10):
         with patch("src.api.upload.upload_model_folder", new_callable=AsyncMock):
             async with AsyncClient(transport=transport, base_url="http://test") as client:
+                headers = await _session_auth_headers(client)
                 response = await client.post(
                     "/api/upload/start",
                     data={"repository_id": "testuser/my-model"},
                     files=_make_files(["big.bin"]),
-                    headers={"Authorization": "Bearer hf_valid_token"},
+                    headers=headers,
                 )
     assert response.status_code == 413
 
@@ -119,11 +132,12 @@ async def test_upload_start_success(transport):
     with patch("src.api.upload.upload_model_folder", new_callable=AsyncMock) as mock_upload:
         mock_upload.return_value = "commit_abc123"
         async with AsyncClient(transport=transport, base_url="http://test") as client:
+            headers = await _session_auth_headers(client)
             response = await client.post(
                 "/api/upload/start",
                 data={"repository_id": "testuser/my-model"},
                 files=_make_files(["model.bin"]),
-                headers={"Authorization": "Bearer hf_valid_token"},
+                headers=headers,
             )
     assert response.status_code == 200
     data = response.json()
@@ -146,11 +160,12 @@ async def test_upload_start_conflict(transport):
     with patch("src.api.upload.upload_model_folder", new_callable=AsyncMock) as mock_upload:
         mock_upload.side_effect = PermissionError("Repository conflict")
         async with AsyncClient(transport=transport, base_url="http://test") as client:
+            headers = await _session_auth_headers(client)
             response = await client.post(
                 "/api/upload/start",
                 data={"repository_id": "otheruser/their-model"},
                 files=_make_files(["model.bin"]),
-                headers={"Authorization": "Bearer hf_valid_token"},
+                headers=headers,
             )
     assert response.status_code == 409
 
@@ -160,10 +175,59 @@ async def test_upload_start_forbidden(transport):
     with patch("src.api.upload.upload_model_folder", new_callable=AsyncMock) as mock_upload:
         mock_upload.side_effect = PermissionError("Token lacks write permission")
         async with AsyncClient(transport=transport, base_url="http://test") as client:
+            headers = await _session_auth_headers(client)
             response = await client.post(
                 "/api/upload/start",
                 data={"repository_id": "testuser/my-model"},
                 files=_make_files(["model.bin"]),
-                headers={"Authorization": "Bearer hf_read_only_token"},
+                headers=headers,
             )
     assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_upload_idempotency_replay_returns_same_response(transport):
+    with patch("src.api.upload.upload_model_folder", new_callable=AsyncMock) as mock_upload:
+        mock_upload.return_value = []
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            headers = await _session_auth_headers(client)
+            headers["X-Idempotency-Key"] = "retry-upload-1"
+            first = await client.post(
+                "/api/upload/start",
+                data={"repository_id": "testuser/my-model"},
+                files=_make_files(["model.bin"]),
+                headers=headers,
+            )
+            second = await client.post(
+                "/api/upload/start",
+                data={"repository_id": "testuser/my-model"},
+                files=_make_files(["model.bin"]),
+                headers=headers,
+            )
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["session_id"] == second.json()["session_id"]
+    assert mock_upload.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_upload_idempotency_conflict_on_different_payload(transport):
+    with patch("src.api.upload.upload_model_folder", new_callable=AsyncMock) as mock_upload:
+        mock_upload.return_value = []
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            headers = await _session_auth_headers(client)
+            headers["X-Idempotency-Key"] = "retry-upload-2"
+            first = await client.post(
+                "/api/upload/start",
+                data={"repository_id": "testuser/my-model"},
+                files=_make_files(["model.bin"]),
+                headers=headers,
+            )
+            second = await client.post(
+                "/api/upload/start",
+                data={"repository_id": "testuser/my-model"},
+                files=_make_files(["other.bin"]),
+                headers=headers,
+            )
+    assert first.status_code == 200
+    assert second.status_code == 409

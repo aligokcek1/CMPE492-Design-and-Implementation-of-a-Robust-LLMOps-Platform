@@ -3,21 +3,18 @@ import posixpath
 import shutil
 import tempfile
 import uuid
-from fastapi import APIRouter, Form, HTTPException, Header, UploadFile, File
 from typing import Annotated
 
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
+
+from ..api.auth_helpers import require_session
 from ..models.upload import UploadStartResponse
 from ..services.huggingface import upload_model_folder
+from ..services.session_store import SessionError, session_store
 
 router = APIRouter()
 
 MAX_UPLOAD_BYTES: int = 5 * 1024 * 1024 * 1024  # 5 GB
-
-
-def _extract_token(authorization: str | None) -> str:
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
-    return authorization.removeprefix("Bearer ")
 
 
 def _sanitise_filename(raw: str) -> str:
@@ -44,10 +41,23 @@ def _sanitise_filename(raw: str) -> str:
 async def start_upload(
     repository_id: Annotated[str, Form()],
     files: Annotated[list[UploadFile], File()],
-    authorization: Annotated[str | None, Header()] = None,
+    idempotency_key: Annotated[str | None, Header(alias="X-Idempotency-Key")] = None,
+    session=Depends(require_session),
 ) -> UploadStartResponse:
-    token = _extract_token(authorization)
     session_id = str(uuid.uuid4())
+    request_names = sorted((f.filename or "unnamed_file") for f in files)
+    request_fingerprint = f"{repository_id}|{'|'.join(request_names)}"
+    try:
+        replay = session_store.check_idempotency(
+            username=session.username,
+            operation_type="upload",
+            idempotency_key=idempotency_key,
+            request_fingerprint=request_fingerprint,
+        )
+    except SessionError as exc:
+        raise HTTPException(status_code=409, detail=exc.message)
+    if replay is not None:
+        return UploadStartResponse(**replay.response_body)
 
     total_size = 0
     file_contents: list[tuple[str, bytes]] = []
@@ -75,7 +85,7 @@ async def start_upload(
                 fh.write(content)
 
         folder_results = await upload_model_folder(
-            token=token,
+            token=session.hf_token,
             local_path=tmp_dir,
             repo_id=repository_id,
         )
@@ -94,4 +104,13 @@ async def start_upload(
     if not isinstance(folder_results, list):
         folder_results = []
 
-    return UploadStartResponse(session_id=session_id, folder_results=folder_results)
+    response = UploadStartResponse(session_id=session_id, folder_results=folder_results)
+    session_store.store_idempotency_result(
+        username=session.username,
+        operation_type="upload",
+        idempotency_key=idempotency_key,
+        request_fingerprint=request_fingerprint,
+        status_code=200,
+        response_body=response.model_dump(),
+    )
+    return response

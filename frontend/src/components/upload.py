@@ -1,7 +1,9 @@
 import posixpath
+import uuid
 
 import streamlit as st
 from src.services.api_client import start_upload, list_models, APIError
+from src.services.session_client import get_session_token
 
 MAX_UPLOAD_BYTES: int = 5 * 1024 * 1024 * 1024  # 5 GB
 
@@ -48,7 +50,7 @@ def render_upload_section() -> None:
         "The directory structure is preserved inside the target Hugging Face repository."
     )
 
-    token = st.session_state.get("hf_token", "")
+    session_token = get_session_token()
     username = st.session_state.get("hf_username", "")
 
     repo_name = st.text_input(
@@ -111,11 +113,22 @@ def render_upload_section() -> None:
             )
             return
 
+        request_key = st.session_state.get("_request_nonce")
+        if not request_key:
+            request_key = str(uuid.uuid4())
+            st.session_state["_request_nonce"] = request_key
+
         with st.spinner("Uploading…"):
             try:
-                result = start_upload(token, repo_name, all_files)
+                result = start_upload(
+                    session_token,
+                    repo_name,
+                    all_files,
+                    idempotency_key=f"upload:{request_key}",
+                )
                 st.session_state["selected_model"] = repo_name
                 st.session_state["upload_result"] = result
+                st.session_state.pop("_request_nonce", None)
                 st.toast(f"Model uploaded! Session: {result['session_id']}", icon="✅")
                 st.success(
                     f"Successfully uploaded to **{repo_name}**. "
@@ -123,6 +136,14 @@ def render_upload_section() -> None:
                 )
             except APIError as exc:
                 st.session_state.pop("upload_result", None)
+                if exc.status_code == 401:
+                    st.session_state["last_auth_error"] = "Session expired. Please sign in again."
+                    st.session_state["pending_action"] = {
+                        "type": "upload",
+                        "repository_id": repo_name,
+                    }
+                    st.error("Session expired. Please sign in again.")
+                    return
                 if exc.status_code == 403 or "write permission" in exc.detail.lower():
                     st.error(
                         "Your Hugging Face token does not have **write permissions** for this repository. "
@@ -147,7 +168,7 @@ def render_upload_section() -> None:
 def render_model_selector() -> None:
     """Render the existing HF model selection UI."""
     st.subheader("Or Select an Existing Hugging Face Model")
-    token = st.session_state.get("hf_token", "")
+    session_token = get_session_token()
 
     if st.button("Refresh My Models", key="btn_refresh_models"):
         st.session_state.pop("hf_models_cache", None)
@@ -155,9 +176,14 @@ def render_model_selector() -> None:
     if "hf_models_cache" not in st.session_state:
         with st.spinner("Fetching your models from Hugging Face…"):
             try:
-                models = list_models(token)
+                models = list_models(session_token)
                 st.session_state["hf_models_cache"] = models
             except APIError as exc:
+                if exc.status_code == 401:
+                    st.session_state["last_auth_error"] = "Session expired while loading your models."
+                    st.session_state["pending_action"] = {"type": "list_models"}
+                    st.error("Session expired. Please sign in again.")
+                    return
                 st.error(f"Could not fetch models: {exc.detail}")
                 return
             except Exception as exc:

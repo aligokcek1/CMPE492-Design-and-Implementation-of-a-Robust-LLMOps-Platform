@@ -1,9 +1,10 @@
 import re
-from fastapi import APIRouter, HTTPException, Header
-from typing import Annotated, Any
+from fastapi import APIRouter, Depends, HTTPException
+from typing import Any
 
 from huggingface_hub.utils import HfHubHTTPError, RepositoryNotFoundError
 
+from ..api.auth_helpers import require_session
 from ..models.upload import PublicModelInfoResponse
 from ..services.huggingface import list_user_models, fetch_public_model_info
 
@@ -12,19 +13,12 @@ router = APIRouter()
 _REPO_ID_RE = re.compile(r"^[\w\-\.]+/[\w\-\.]+$")
 
 
-def _extract_token(authorization: str | None) -> str:
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
-    return authorization.removeprefix("Bearer ")
-
-
 @router.get("/models", response_model=list[dict])
 async def get_models(
-    authorization: Annotated[str | None, Header()] = None,
+    session=Depends(require_session),
 ) -> list[dict[str, Any]]:
-    token = _extract_token(authorization)
     try:
-        return await list_user_models(token)
+        return await list_user_models(session.hf_token)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -32,10 +26,8 @@ async def get_models(
 @router.get("/models/public", response_model=PublicModelInfoResponse)
 async def get_public_model(
     repo_id: str,
-    authorization: Annotated[str | None, Header()] = None,
+    _session=Depends(require_session),
 ) -> PublicModelInfoResponse:
-    _extract_token(authorization)
-
     if not _REPO_ID_RE.match(repo_id):
         raise HTTPException(
             status_code=400,
