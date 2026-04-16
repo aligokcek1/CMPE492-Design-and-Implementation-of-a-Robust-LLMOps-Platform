@@ -48,6 +48,12 @@ class GCPCredentialsRow(Base):
     billing_account_id: Mapped[str] = mapped_column(String, nullable=False)
     service_account_email: Mapped[str] = mapped_column(String, nullable=False)
     gcp_project_id_of_sa: Mapped[str] = mapped_column(String, nullable=False)
+    # GCP requires service-accounts to create projects under an existing
+    # Organization or Folder parent. Format: "organizations/<num>" or
+    # "folders/<num>". Nullable for backward compatibility with rows created
+    # before the column existed; missing parent → create_project returns a
+    # clear 400 at deploy time.
+    gcp_parent: Mapped[str | None] = mapped_column(String, nullable=True)
     last_validated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
     validation_status: Mapped[str] = mapped_column(String, nullable=False, default="valid")
     validation_error_message: Mapped[str | None] = mapped_column(String, nullable=True)

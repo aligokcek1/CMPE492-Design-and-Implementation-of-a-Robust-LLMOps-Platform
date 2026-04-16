@@ -18,6 +18,7 @@ def _to_response(status_obj) -> GCPCredentialsStatus:
         service_account_email=status_obj.service_account_email,
         gcp_project_id_of_sa=status_obj.gcp_project_id_of_sa,
         billing_account_id=status_obj.billing_account_id,
+        gcp_parent=status_obj.gcp_parent,
         validation_status=status_obj.validation_status,
         validation_error_message=status_obj.validation_error_message,
         last_validated_at=status_obj.last_validated_at,
@@ -44,6 +45,7 @@ async def save_credentials(
             sa_json=payload.service_account_json,
             billing_account_id=payload.billing_account_id,
             provider=provider,
+            gcp_parent=payload.gcp_parent,
         )
     except GCPProviderError as exc:
         raise HTTPException(

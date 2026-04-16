@@ -72,8 +72,15 @@ class GCPProvider(Protocol):
     async def validate_credentials(self, sa_json: str, billing_account_id: str) -> ValidationResult:
         ...
 
-    async def create_project(self, user_id: str, deployment_id: str) -> str:
-        """Create a brand-new GCP project and return its project_id."""
+    async def create_project(self, user_id: str, deployment_id: str, project_id: str) -> str:
+        """Create a brand-new GCP project with the given ``project_id`` and return it.
+
+        The id is pre-allocated by the orchestrator (deterministic, derived from
+        the deployment id) so the platform can persist the project id *before*
+        talking to GCP — ensuring we never lose the mapping on a mid-flight
+        crash. Implementations must either create exactly this project id or
+        raise.
+        """
         ...
 
     async def enable_services(self, project_id: str) -> None:

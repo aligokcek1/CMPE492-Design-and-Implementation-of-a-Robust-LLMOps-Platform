@@ -43,8 +43,10 @@ def _render_status_panel(status: dict) -> None:
     with cols[0]:
         st.markdown("**Service account**")
         st.code(status.get("service_account_email") or "—", language=None)
-        st.markdown("**SA's parent project**")
+        st.markdown("**SA's home project**")
         st.code(status.get("gcp_project_id_of_sa") or "—", language=None)
+        st.markdown("**Deployment parent (Org / Folder)**")
+        st.code(status.get("gcp_parent") or "— (service accounts require one to create projects)", language=None)
     with cols[1]:
         st.markdown("**Billing account**")
         st.code(status.get("billing_account_id") or "—", language=None)
@@ -73,6 +75,18 @@ def _render_save_form() -> None:
             placeholder="billingAccounts/XXXXXX-XXXXXX-XXXXXX",
             key="gcp_billing_input",
         )
+        parent = st.text_input(
+            "Deployment parent (Organization or Folder)",
+            placeholder="organizations/123456789012   or   folders/987654321098",
+            help=(
+                "GCP requires service accounts to create projects under an existing "
+                "Organization or Folder. Paste its resource name here. The service "
+                "account must have the 'roles/resourcemanager.projectCreator' role on it. "
+                "Leave blank only if you're using personal credentials that create "
+                "projects under 'No organization' (rare outside free-trial accounts)."
+            ),
+            key="gcp_parent_input",
+        )
         submitted = st.form_submit_button("Save and validate", type="primary", use_container_width=True)
 
     if not submitted:
@@ -83,11 +97,21 @@ def _render_save_form() -> None:
         st.error("You must be signed in to save credentials.")
         return
     if not sa_json.strip() or not billing_id.strip():
-        st.error("Both fields are required.")
+        st.error("Service account JSON and billing account ID are required.")
+        return
+
+    parent_clean = parent.strip() or None
+    if parent_clean and not (
+        parent_clean.startswith("organizations/") or parent_clean.startswith("folders/")
+    ):
+        st.error(
+            "Parent must be formatted as 'organizations/<numeric-id>' "
+            "or 'folders/<numeric-id>'."
+        )
         return
 
     try:
-        new_status = save_gcp_credentials(token, sa_json, billing_id)
+        new_status = save_gcp_credentials(token, sa_json, billing_id, gcp_parent=parent_clean)
     except APIError as exc:
         st.error(f"Credential validation failed: {exc.detail}")
         return

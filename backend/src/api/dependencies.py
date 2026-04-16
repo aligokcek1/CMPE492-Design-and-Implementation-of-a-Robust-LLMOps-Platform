@@ -10,14 +10,15 @@ import os
 from ..services.gcp_fake_provider import FakeGCPProvider
 from ..services.gcp_provider import GCPProvider
 
-
 _provider_instance: GCPProvider | None = None
 
 
 def _build_default_provider() -> GCPProvider:
     if os.environ.get("LLMOPS_USE_FAKE_GCP") == "1":
         return FakeGCPProvider()
-    from ..services.gcp_real_provider import RealGCPProvider  # noqa: WPS433 - intentional lazy import
+    from ..services.gcp_real_provider import (
+        RealGCPProvider,  # noqa: WPS433 - intentional lazy import
+    )
 
     return RealGCPProvider()
 

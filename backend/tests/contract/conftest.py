@@ -7,7 +7,6 @@ import pytest
 from cryptography.fernet import Fernet
 from httpx import ASGITransport
 
-
 _GENERATED_KEY = Fernet.generate_key().decode()
 os.environ.setdefault("LLMOPS_ENCRYPTION_KEY", _GENERATED_KEY)
 os.environ.setdefault("LLMOPS_USE_FAKE_GCP", "1")

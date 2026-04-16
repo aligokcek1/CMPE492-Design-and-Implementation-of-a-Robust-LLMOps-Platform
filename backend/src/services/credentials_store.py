@@ -10,7 +10,6 @@ from ..db.models import GCPCredentialsRow
 from .crypto import decrypt, encrypt
 from .gcp_provider import GCPProvider, GCPProviderError
 
-
 _NON_TERMINAL_STATUSES = ("queued", "deploying", "running", "deleting")
 
 
@@ -20,6 +19,7 @@ class CredentialStatus:
     service_account_email: str | None
     gcp_project_id_of_sa: str | None
     billing_account_id: str | None
+    gcp_parent: str | None
     validation_status: str | None
     validation_error_message: str | None
     last_validated_at: datetime | None
@@ -50,11 +50,14 @@ class CredentialsStore:
         sa_json: str,
         billing_account_id: str,
         provider: GCPProvider,
+        gcp_parent: str | None = None,
     ) -> CredentialStatus:
         result = await provider.validate_credentials(sa_json, billing_account_id)
 
         encrypted_blob = encrypt(sa_json)
         now = datetime.now(UTC)
+
+        normalised_parent = (gcp_parent or "").strip() or None
 
         session_factory = get_session_factory()
         with session_factory() as db:
@@ -69,6 +72,7 @@ class CredentialsStore:
                     billing_account_id=result.billing_account_id,
                     service_account_email=result.service_account_email,
                     gcp_project_id_of_sa=result.gcp_project_id_of_sa,
+                    gcp_parent=normalised_parent,
                     last_validated_at=now,
                     validation_status="valid",
                     validation_error_message=None,
@@ -81,6 +85,7 @@ class CredentialsStore:
                 existing.billing_account_id = result.billing_account_id
                 existing.service_account_email = result.service_account_email
                 existing.gcp_project_id_of_sa = result.gcp_project_id_of_sa
+                existing.gcp_parent = normalised_parent
                 existing.last_validated_at = now
                 existing.validation_status = "valid"
                 existing.validation_error_message = None
@@ -106,6 +111,7 @@ class CredentialsStore:
                 service_account_email=None,
                 gcp_project_id_of_sa=None,
                 billing_account_id=None,
+                gcp_parent=None,
                 validation_status=None,
                 validation_error_message=None,
                 last_validated_at=None,
@@ -116,6 +122,7 @@ class CredentialsStore:
             service_account_email=row.service_account_email,
             gcp_project_id_of_sa=row.gcp_project_id_of_sa,
             billing_account_id=row.billing_account_id,
+            gcp_parent=row.gcp_parent,
             validation_status=row.validation_status,
             validation_error_message=row.validation_error_message,
             last_validated_at=row.last_validated_at,
@@ -133,6 +140,29 @@ class CredentialsStore:
             return None
 
         return decrypt(row.service_account_json_encrypted), row.billing_account_id
+
+    async def get_parent(self, *, user_id: str) -> str | None:
+        """Return the saved Organization/Folder parent (or ``None`` if unset)."""
+        session_factory = get_session_factory()
+        with session_factory() as db:
+            row = db.execute(
+                select(GCPCredentialsRow).where(GCPCredentialsRow.user_id == user_id)
+            ).scalar_one_or_none()
+        return row.gcp_parent if row is not None else None
+
+    async def get_billing_account_id(self, *, user_id: str) -> str | None:
+        """Return only the (plaintext) billing account ID — no SA JSON decrypt needed.
+
+        Used by the orchestrator so it can attach billing without round-tripping
+        the encrypted blob. Billing account IDs are not secrets per the data
+        model (``data-model.md``).
+        """
+        session_factory = get_session_factory()
+        with session_factory() as db:
+            row = db.execute(
+                select(GCPCredentialsRow).where(GCPCredentialsRow.user_id == user_id)
+            ).scalar_one_or_none()
+        return row.billing_account_id if row is not None else None
 
     # ------------------------------------------------------------------ #
     # delete                                                             #

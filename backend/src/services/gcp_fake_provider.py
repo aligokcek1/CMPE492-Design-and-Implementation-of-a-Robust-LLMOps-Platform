@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import secrets
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -110,12 +109,20 @@ class FakeGCPProvider(GCPProvider):
             billing_account_id=billing_account_id,
         )
 
-    async def create_project(self, user_id: str, deployment_id: str) -> str:
-        self._record("create_project", user_id=user_id, deployment_id=deployment_id)
+    async def create_project(self, user_id: str, deployment_id: str, project_id: str) -> str:
+        self._record(
+            "create_project",
+            user_id=user_id,
+            deployment_id=deployment_id,
+            project_id=project_id,
+        )
         self._maybe_fail("create_project")
         await self._yield()
 
-        project_id = f"llmops-{secrets.token_hex(4)}-{deployment_id[:6]}"
+        if project_id in self._projects:
+            raise GCPProviderError(
+                f"Project {project_id} already exists in the fake provider."
+            )
         self._projects[project_id] = _FakeProject(project_id=project_id)
         return project_id
 
