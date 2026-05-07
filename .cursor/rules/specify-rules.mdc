@@ -96,3 +96,8 @@ Python 3.11: Follow standard conventions. Ruff for linting.
 ## Recent Changes
 - 007-gke-inference-pipeline: Added Python 3.11 (backend + frontend)
 - 006-session-persistence: Implemented backend-managed session lifecycle, session restore endpoint, current-device logout, idempotent upload/deploy retries, and browser cookie-backed frontend session persistence
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->
