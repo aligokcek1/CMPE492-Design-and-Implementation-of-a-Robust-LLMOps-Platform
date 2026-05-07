@@ -72,32 +72,20 @@ LLMOPS_K8S_DRYRUN_KUBECONFIG=~/.kube/scratch-config \
   cd backend && pytest tests/dryrun
 ```
 
-## Testing Policy (mandatory)
-
-- **Tests MUST NOT call real cloud services.** The default `pytest` run touches zero GCP APIs, creates zero projects, launches zero clusters, incurs zero cost.
-- The GCP boundary is crossed only through the `GCPProvider` protocol. Tests inject `FakeGCPProvider`; production injects `RealGCPProvider`. No test may import `RealGCPProvider`.
-- Where a real-fidelity check is desired, prefer **dry-run** over live side effects:
-  - **Kubernetes manifests**: validate with the Python `kubernetes` client using `dry_run=["All"]` (server-side dry-run). Gated on `LLMOPS_K8S_DRYRUN_KUBECONFIG` — suite is skipped when unset. Still does not touch GCP.
-  - **GCP Resource Manager / Billing / GKE cluster create**: these APIs expose no dry-run flag. Do NOT invent a "live smoke" suite that calls them; rely on the fake + manual end-to-end verification before release.
-- CI runs `pytest` with no cloud env vars set. Any test that requires network access to a cloud endpoint is either (a) gated behind an env var and skipped by default, or (b) rejected in review.
-
 ## Code Style
 
 Python 3.11: Follow standard conventions. Ruff for linting.
 
-## Key Features (implemented)
-- **004-robust-model-upload**: HF token auth, single-file model upload, model listing, mock GCP deployment
-- **005-folder-upload-repo-deploy**: Native directory picker upload (Streamlit `accept_multiple_files="directory"`), multi-folder per-folder error isolation, public repo metadata fetch (`GET /api/models/public`), public repo mock deployment, upload size limit (5 GB), path traversal protection
-- **006-session-persistence**: Backend-issued platform sessions (`POST /api/auth/verify`, `GET /api/auth/session`, `POST /api/auth/logout`), 24h sliding inactivity expiration, session-auth-protected endpoints, upload/deploy idempotency keys, structured session-expired errors, frontend cookie-backed session restore
+## Recent Changes
+- 007-gke-inference-pipeline: Added Python 3.11 (backend + frontend) and encrypted SQLite-backed credential/deployment persistence.
+- 006-session-persistence: Added backend-managed platform sessions, restore/logout endpoints, and idempotent upload/deploy retries.
+- 005-folder-upload-repo-deploy: Added directory upload, per-folder error isolation, public repo metadata fetch, and public repo mock deployment.
+- 004-robust-model-upload: Added HF token verification, model upload/listing flow, and mock GCP deployment integration.
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->
 
-## Recent Changes
-- 007-gke-inference-pipeline: Added Python 3.11 (backend + frontend)
-- 006-session-persistence: Implemented backend-managed session lifecycle, session restore endpoint, current-device logout, idempotent upload/deploy retries, and browser cookie-backed frontend session persistence
-
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
+shell commands, and other important information, read the current plan.
 <!-- SPECKIT END -->
