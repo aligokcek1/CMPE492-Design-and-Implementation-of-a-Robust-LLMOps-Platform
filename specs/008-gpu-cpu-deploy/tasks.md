@@ -17,7 +17,7 @@
 
 **Purpose**: Install new dependencies so subsequent tasks can import new packages.
 
-- [ ] T001 Add `lightning-sdk` and `litserve` to backend dependencies in `backend/pyproject.toml` (or `backend/requirements.txt` / equivalent file where existing deps are declared)
+- [x] T001 Add `lightning-sdk` and `litserve` to backend dependencies in `backend/pyproject.toml` (or `backend/requirements.txt` / equivalent file where existing deps are declared)
 
 ---
 
@@ -27,11 +27,11 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T002 Add `LightningAICredentialsRow` SQLAlchemy model and extend `DeploymentRow` with `hardware_type` + `lightning_ai_deployment_id` columns + make `gcp_project_id` / `gke_cluster_name` / `gke_region` nullable in `backend/src/db/models.py`
-- [ ] T003 Write structural SQLite migration (table rebuild for `deployments`) + additive `lightning_ai_credentials` table creation in `backend/src/db/migrations.py`; gate rebuild on absence of `hardware_type` column via inspector
-- [ ] T004 [P] Add `hardware_type: Literal["cpu", "gpu"]` (required, no default) to `DeployRequest` and `hardware_type: str` to `Deployment` + `DeploymentDetail` response models in `backend/src/models/deployment.py`
-- [ ] T005 [P] Create `LightningAICredentialRequest` (field: `api_key: str`) and `LightningAICredentialStatus` (fields: `configured`, `validation_status`, `validation_error_message`, `last_validated_at`) Pydantic models in `backend/src/models/lightning_ai_credentials.py`
-- [ ] T006 Update `DeploymentStore.create` to accept `hardware_type: str` parameter and store `None` for GKE-specific columns when `hardware_type == "gpu"`; add `store_lightning_deployment_id(deployment_id, lightning_ai_deployment_id)` method in `backend/src/services/deployment_store.py`
+- [x] T002 Add `LightningAICredentialsRow` SQLAlchemy model and extend `DeploymentRow` with `hardware_type` + `lightning_ai_deployment_id` columns + make `gcp_project_id` / `gke_cluster_name` / `gke_region` nullable in `backend/src/db/models.py`
+- [x] T003 Write structural SQLite migration (table rebuild for `deployments`) + additive `lightning_ai_credentials` table creation in `backend/src/db/migrations.py`; gate rebuild on absence of `hardware_type` column via inspector
+- [x] T004 [P] Add `hardware_type: Literal["cpu", "gpu"]` (required, no default) to `DeployRequest` and `hardware_type: str` to `Deployment` + `DeploymentDetail` response models in `backend/src/models/deployment.py`
+- [x] T005 [P] Create `LightningAICredentialRequest` (field: `api_key: str`) and `LightningAICredentialStatus` (fields: `configured`, `validation_status`, `validation_error_message`, `last_validated_at`) Pydantic models in `backend/src/models/lightning_ai_credentials.py`
+- [x] T006 Update `DeploymentStore.create` to accept `hardware_type: str` parameter and store `None` for GKE-specific columns when `hardware_type == "gpu"`; add `store_lightning_deployment_id(deployment_id, lightning_ai_deployment_id)` method in `backend/src/services/deployment_store.py`
 
 **Checkpoint**: DB schema, Pydantic models, and store layer ready — user story implementation can begin.
 
@@ -45,17 +45,17 @@
 
 ### Tests for User Story 1 (write FIRST — verify red before implementing)
 
-- [ ] T007 [P] [US1] Add contract tests to `backend/tests/contract/test_deployment_api.py`: (a) `POST /api/deployments` with `hardware_type="cpu"` returns 202 with `hardware_type="cpu"` in response; (b) `POST /api/deployments` without `hardware_type` returns 422; (c) GET deployment list includes `hardware_type` field on each record
-- [ ] T008 [P] [US1] Add frontend AppTest cases to `frontend/tests/integration/test_workflow.py`: (a) Deploy button is disabled when no hardware type selected after model fetch; (b) Deploy button enables after selecting CPU; (c) form submission includes `hardware_type="cpu"` in payload
+- [x] T007 [P] [US1] Add contract tests to `backend/tests/contract/test_deployment_api.py`: (a) `POST /api/deployments` with `hardware_type="cpu"` returns 202 with `hardware_type="cpu"` in response; (b) `POST /api/deployments` without `hardware_type` returns 422; (c) GET deployment list includes `hardware_type` field on each record
+- [x] T008 [P] [US1] Add frontend AppTest cases to `frontend/tests/integration/test_workflow.py`: (a) Deploy button is disabled when no hardware type selected after model fetch; (b) Deploy button enables after selecting CPU; (c) form submission includes `hardware_type="cpu"` in payload
 
 ### Implementation for User Story 1
 
-- [ ] T009 [US1] Render `st.radio(["CPU", "GPU"], index=None, horizontal=True)` hardware selector in `render_public_repo_deploy_section` and disable the Deploy button until both `hardware_type` and model info are set in `frontend/src/components/deploy.py`
-- [ ] T010 [US1] Pass `hardware_type` as a parameter to the `deploy_public_model` API call in `frontend/src/services/api_client.py`
-- [ ] T011 [US1] Accept `hardware_type` in `POST /api/deployments` request body, pass it to `DeploymentStore.create`, and include it in the 202 response in `backend/src/api/deployment.py`
-- [ ] T012 [US1] Update `DeploymentOrchestrator.run_to_terminal` to branch on `row.hardware_type`: CPU → call existing GKE orchestration logic (rename the inner path to `_run_gke` internally); GPU → stub that will be filled in Phase 4 in `backend/src/services/deployment_orchestrator.py`
-- [ ] T013 [US1] Map `DeploymentRow.hardware_type` into the `Deployment` and `DeploymentDetail` serialization helpers in `backend/src/api/deployment.py`
-- [ ] T014 [US1] Run `cd backend && pytest tests/contract/test_deployment_api.py` and verify all US1 CPU tests pass (green)
+- [x] T009 [US1] Render `st.radio(["CPU", "GPU"], index=None, horizontal=True)` hardware selector in `render_public_repo_deploy_section` and disable the Deploy button until both `hardware_type` and model info are set in `frontend/src/components/deploy.py`
+- [x] T010 [US1] Pass `hardware_type` as a parameter to the `deploy_public_model` API call in `frontend/src/services/api_client.py`
+- [x] T011 [US1] Accept `hardware_type` in `POST /api/deployments` request body, pass it to `DeploymentStore.create`, and include it in the 202 response in `backend/src/api/deployment.py`
+- [x] T012 [US1] Update `DeploymentOrchestrator.run_to_terminal` to branch on `row.hardware_type`: CPU → call existing GKE orchestration logic (rename the inner path to `_run_gke` internally); GPU → stub that will be filled in Phase 4 in `backend/src/services/deployment_orchestrator.py`
+- [x] T013 [US1] Map `DeploymentRow.hardware_type` into the `Deployment` and `DeploymentDetail` serialization helpers in `backend/src/api/deployment.py`
+- [x] T014 [US1] Run `cd backend && pytest tests/contract/test_deployment_api.py` and verify all US1 CPU tests pass (green)
 
 **Checkpoint**: Hardware selector visible in UI, CPU deployments tagged `hardware_type="cpu"`, all existing CPU tests passing.
 
@@ -69,38 +69,38 @@
 
 ### Tests for User Story 2 (write FIRST — verify red before implementing)
 
-- [ ] T015 [P] [US2] Write contract tests in `backend/tests/contract/test_lightning_ai_credentials_api.py`: GET not-configured (200, `configured=false`), POST valid key (200, `configured=true`, `validation_status="valid"`), POST invalid key (400, code `lightning_auth_error`), DELETE (204), GET after delete (200, `configured=false`)
-- [ ] T016 [P] [US2] Add GPU deployment contract tests to `backend/tests/contract/test_deployment_api.py`: GPU happy path (202, `hardware_type="gpu"`), `lightning_credentials_missing` (409), `lightning_credentials_invalid` (409), GPU delete (202 → polling → deleted), inference proxy on GPU endpoint URL; **also** add a mixed-hardware concurrent-limit test: create 2 CPU + 1 GPU deployment (3 active total) → 4th attempt of either type must return 409 `concurrent_deployment_limit` (FR-019)
-- [ ] T017 [P] [US2] Add frontend AppTest cases to `frontend/tests/integration/test_workflow.py`: GPU selection enables Deploy button; submitting GPU deploy without Lightning AI key shows a banner directing to ⚡ tab; ⚡ tab renders API key input form
+- [x] T015 [P] [US2] Write contract tests in `backend/tests/contract/test_lightning_ai_credentials_api.py`: GET not-configured (200, `configured=false`), POST valid key (200, `configured=true`, `validation_status="valid"`), POST invalid key (400, code `lightning_auth_error`), DELETE (204), GET after delete (200, `configured=false`)
+- [x] T016 [P] [US2] Add GPU deployment contract tests to `backend/tests/contract/test_deployment_api.py`: GPU happy path (202, `hardware_type="gpu"`), `lightning_credentials_missing` (409), `lightning_credentials_invalid` (409), GPU delete (202 → polling → deleted), inference proxy on GPU endpoint URL; **also** add a mixed-hardware concurrent-limit test: create 2 CPU + 1 GPU deployment (3 active total) → 4th attempt of either type must return 409 `concurrent_deployment_limit` (FR-019)
+- [x] T017 [P] [US2] Add frontend AppTest cases to `frontend/tests/integration/test_workflow.py`: GPU selection enables Deploy button; submitting GPU deploy without Lightning AI key shows a banner directing to ⚡ tab; ⚡ tab renders API key input form
 
 ### Implementation for User Story 2 — Provider Layer
 
-- [ ] T018 [P] [US2] Implement `LightningAIProvider` runtime protocol (methods: `deploy`, `get_status`, `delete`, `validate_api_key`) + `RealLightningAIProvider` that calls the `lightning-sdk` client in `backend/src/services/lightning_ai_provider.py`
-- [ ] T019 [P] [US2] Implement `FakeLightningAIProvider` with deterministic responses (configurable to succeed or raise `LightningAIAuthError` / `LightningAIServiceError`) in `backend/src/services/lightning_ai_fake_provider.py`
+- [x] T018 [P] [US2] Implement `LightningAIProvider` runtime protocol (methods: `deploy`, `get_status`, `delete`, `validate_api_key`) + `RealLightningAIProvider` that calls the `lightning-sdk` client in `backend/src/services/lightning_ai_provider.py`
+- [x] T019 [P] [US2] Implement `FakeLightningAIProvider` with deterministic responses (configurable to succeed or raise `LightningAIAuthError` / `LightningAIServiceError`) in `backend/src/services/lightning_ai_fake_provider.py`
 
 ### Implementation for User Story 2 — Credential Store & API
 
-- [ ] T020 [US2] Implement `LightningAICredentialsStore` (methods: `save`, `get_status`, `get_decrypted_key`, `delete`, `record_key_invalid`) using `encrypt`/`decrypt` from `backend/src/services/crypto.py` in `backend/src/services/lightning_ai_credentials_store.py`
-- [ ] T021 [US2] Implement `lightning_ai_credentials` API router: `GET ""` → status, `POST ""` → save+validate via provider, `DELETE ""` → delete in `backend/src/api/lightning_ai_credentials.py`
-- [ ] T022 [US2] Register `lightning_ai_credentials.router` under `/api/lightning/credentials` prefix in `backend/src/main.py`; add `FakeLightningAIProvider` fixture and provider override to `backend/tests/contract/conftest.py`
-- [ ] T022a [US2] Add `get_lightning_ai_provider` dependency function and `reset_lightning_ai_provider_for_tests` override to `backend/src/api/dependencies.py`; export both from `backend/src/main.py` `__all__` (mirrors existing `get_gcp_provider` / `reset_gcp_provider_for_tests` pattern) — required for FastAPI dependency-override injection in contract tests
+- [x] T020 [US2] Implement `LightningAICredentialsStore` (methods: `save`, `get_status`, `get_decrypted_key`, `delete`, `record_key_invalid`) using `encrypt`/`decrypt` from `backend/src/services/crypto.py` in `backend/src/services/lightning_ai_credentials_store.py`
+- [x] T021 [US2] Implement `lightning_ai_credentials` API router: `GET ""` → status, `POST ""` → save+validate via provider, `DELETE ""` → delete in `backend/src/api/lightning_ai_credentials.py`
+- [x] T022 [US2] Register `lightning_ai_credentials.router` under `/api/lightning/credentials` prefix in `backend/src/main.py`; add `FakeLightningAIProvider` fixture and provider override to `backend/tests/contract/conftest.py`
+- [x] T022a [US2] Add `get_lightning_ai_provider` dependency function and `reset_lightning_ai_provider_for_tests` override to `backend/src/api/dependencies.py`; export both from `backend/src/main.py` `__all__` (mirrors existing `get_gcp_provider` / `reset_gcp_provider_for_tests` pattern) — required for FastAPI dependency-override injection in contract tests
 
 ### Implementation for User Story 2 — GPU Orchestration
 
-- [ ] T023 [P] [US2] Implement `generate(hf_model_id: str) -> str` returning a LitServe + vLLM server script string in `backend/src/services/litserve_gpu.py`
-- [ ] T024 [US2] Implement `DeploymentOrchestrator._run_lightning_ai`: decrypt key, generate script via `litserve_gpu.generate`, write to `NamedTemporaryFile`, call `provider.deploy()`, store returned ID via `deployment_store.store_lightning_deployment_id`, update status messages in `backend/src/services/deployment_orchestrator.py`
-- [ ] T025 [US2] Update `refresh_statuses` loop body to poll `lightning_ai_provider.get_status()` for GPU rows (branch on `row.hardware_type`); call `record_key_invalid` on `LightningAIAuthError`; update `status` and `status_message` in `backend/src/services/deployment_orchestrator.py`
-- [ ] T025a [US2] Update `start_status_refresh_loop` signature to accept both `get_gcp_provider` and `get_lightning_ai_provider` callables; update the lifespan startup call in `backend/src/main.py` to pass both providers — without this GPU rows are never polled in production
-- [ ] T026 [US2] Add GPU pre-flight check to `POST /api/deployments` handler: if `hardware_type=="gpu"` and key not configured → 409 `lightning_credentials_missing`; if `validation_status=="invalid"` → 409 `lightning_credentials_invalid` in `backend/src/api/deployment.py`
-- [ ] T027 [US2] Add GPU delete support to `DELETE /api/deployments/{id}`: if `hardware_type=="gpu"`, call `lightning_ai_provider.delete()`; treat SDK `NotFound` as success (mirrors GCP not-found handling) in `backend/src/api/deployment.py`
-- [ ] T027a [US2] Backend test checkpoint — run `cd backend && pytest tests/contract/test_lightning_ai_credentials_api.py tests/contract/test_deployment_api.py` and verify all US2 backend tests pass (green) before proceeding to frontend tasks
+- [x] T023 [P] [US2] Implement `generate(hf_model_id: str) -> str` returning a LitServe + vLLM server script string in `backend/src/services/litserve_gpu.py`
+- [x] T024 [US2] Implement `DeploymentOrchestrator._run_lightning_ai`: decrypt key, generate script via `litserve_gpu.generate`, write to `NamedTemporaryFile`, call `provider.deploy()`, store returned ID via `deployment_store.store_lightning_deployment_id`, update status messages in `backend/src/services/deployment_orchestrator.py`
+- [x] T025 [US2] Update `refresh_statuses` loop body to poll `lightning_ai_provider.get_status()` for GPU rows (branch on `row.hardware_type`); call `record_key_invalid` on `LightningAIAuthError`; update `status` and `status_message` in `backend/src/services/deployment_orchestrator.py`
+- [x] T025a [US2] Update `start_status_refresh_loop` signature to accept both `get_gcp_provider` and `get_lightning_ai_provider` callables; update the lifespan startup call in `backend/src/main.py` to pass both providers — without this GPU rows are never polled in production
+- [x] T026 [US2] Add GPU pre-flight check to `POST /api/deployments` handler: if `hardware_type=="gpu"` and key not configured → 409 `lightning_credentials_missing`; if `validation_status=="invalid"` → 409 `lightning_credentials_invalid` in `backend/src/api/deployment.py`
+- [x] T027 [US2] Add GPU delete support to `DELETE /api/deployments/{id}`: if `hardware_type=="gpu"`, call `lightning_ai_provider.delete()`; treat SDK `NotFound` as success (mirrors GCP not-found handling) in `backend/src/api/deployment.py`
+- [x] T027a [US2] Backend test checkpoint — run `cd backend && pytest tests/contract/test_lightning_ai_credentials_api.py tests/contract/test_deployment_api.py` and verify all US2 backend tests pass (green) before proceeding to frontend tasks
 
 ### Implementation for User Story 2 — Frontend
 
-- [ ] T028 [US2] Add `get_lightning_credentials_status`, `save_lightning_credentials`, `delete_lightning_credentials` API client functions to `frontend/src/services/api_client.py`
-- [ ] T029 [US2] Implement `render_lightning_ai_credentials_section` component (status panel + API key form + delete button, mirrors `gcp_credentials.py` structure) in `frontend/src/components/lightning_ai_credentials.py`
-- [ ] T030 [US2] Add ⚡ Lightning AI tab (6th tab) to the `st.tabs` call and render `render_lightning_ai_credentials_section` inside it in `frontend/src/app.py`
-- [ ] T031 [US2] Add GPU error handling to `render_public_repo_deploy_section`: on 409 `lightning_credentials_missing` or `lightning_credentials_invalid`, show `st.error` banner directing the user to the ⚡ Lightning AI tab in `frontend/src/components/deploy.py`
+- [x] T028 [US2] Add `get_lightning_credentials_status`, `save_lightning_credentials`, `delete_lightning_credentials` API client functions to `frontend/src/services/api_client.py`
+- [x] T029 [US2] Implement `render_lightning_ai_credentials_section` component (status panel + API key form + delete button, mirrors `gcp_credentials.py` structure) in `frontend/src/components/lightning_ai_credentials.py`
+- [x] T030 [US2] Add ⚡ Lightning AI tab (6th tab) to the `st.tabs` call and render `render_lightning_ai_credentials_section` inside it in `frontend/src/app.py`
+- [x] T031 [US2] Add GPU error handling to `render_public_repo_deploy_section`: on 409 `lightning_credentials_missing` or `lightning_credentials_invalid`, show `st.error` banner directing the user to the ⚡ Lightning AI tab in `frontend/src/components/deploy.py`
 
 **Checkpoint**: GPU deployments end-to-end — credential management, SDK deploy, status polling, delete, and frontend error messages all working with the fake provider.
 
@@ -114,14 +114,14 @@
 
 ### Tests for User Story 3 (write FIRST — verify red before implementing)
 
-- [ ] T032 [P] [US3] Add frontend AppTest assertions to `frontend/tests/integration/test_workflow.py`: CPU deployment row shows "GKE" or "CPU" label AND must NOT contain "Lightning AI"; GPU deployment row shows "Lightning AI" or "GPU" label AND must NOT contain "GKE"; GPU failure message contains "Lightning AI"; GPU deployment in `deploying` state renders a non-empty `status_message` (not a static placeholder) — FR-008 bidirectional non-contamination + FR-015 live status display
+- [x] T032 [P] [US3] Add frontend AppTest assertions to `frontend/tests/integration/test_workflow.py`: CPU deployment row shows "GKE" or "CPU" label AND must NOT contain "Lightning AI"; GPU deployment row shows "Lightning AI" or "GPU" label AND must NOT contain "GKE"; GPU failure message contains "Lightning AI"; GPU deployment in `deploying` state renders a non-empty `status_message` (not a static placeholder) — FR-008 bidirectional non-contamination + FR-015 live status display
 
 ### Implementation for User Story 3
 
-- [ ] T033 [US3] Add `hardware_type` badge ("⚙️ CPU / GKE" vs "⚡ GPU / Lightning AI") to each row in `render_deployments_list` in `frontend/src/components/deployments_list.py`
-- [ ] T034 [US3] Ensure GPU failure status messages from `_run_lightning_ai` always reference Lightning AI by name and include "check your Lightning AI API key" when the cause is auth-related in `backend/src/services/deployment_orchestrator.py`
-- [ ] T035 [US3] Extend `_render_credentials_invalid_banner` to also fetch Lightning AI credential status and show a GPU key-invalid warning alongside (or instead of) the GCP warning when appropriate in `frontend/src/app.py`
-- [ ] T036 [US3] Run `cd frontend && pytest` to verify all US3 feedback tests pass (green)
+- [x] T033 [US3] Add `hardware_type` badge ("⚙️ CPU / GKE" vs "⚡ GPU / Lightning AI") to each row in `render_deployments_list` in `frontend/src/components/deployments_list.py`
+- [x] T034 [US3] Ensure GPU failure status messages from `_run_lightning_ai` always reference Lightning AI by name and include "check your Lightning AI API key" when the cause is auth-related in `backend/src/services/deployment_orchestrator.py`
+- [x] T035 [US3] Extend `_render_credentials_invalid_banner` to also fetch Lightning AI credential status and show a GPU key-invalid warning alongside (or instead of) the GCP warning when appropriate in `frontend/src/app.py`
+- [x] T036 [US3] Run `cd frontend && pytest` to verify all US3 feedback tests pass (green)
 
 **Checkpoint**: All three user stories independently functional with hardware-specific feedback throughout.
 
@@ -129,11 +129,11 @@
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T037 [P] Run `cd backend && ruff check . --fix` and resolve any linting issues introduced by feature 008 files
-- [ ] T038 [P] Run `cd frontend && ruff check . --fix` and resolve any linting issues introduced by feature 008 files
-- [ ] T039 Run `cd backend && pytest` (full suite) and confirm zero regressions against all pre-existing CPU contract tests
-- [ ] T040 Run `cd frontend && pytest` (full suite) and confirm all integration tests pass
-- [ ] T041 [P] Add Lightning AI setup instructions (API key, `LLMOPS_ENCRYPTION_KEY` reuse, `pip install lightning-sdk litserve`) to `backend/README.md`
+- [x] T037 [P] Run `cd backend && ruff check . --fix` and resolve any linting issues introduced by feature 008 files
+- [x] T038 [P] Run `cd frontend && ruff check . --fix` and resolve any linting issues introduced by feature 008 files
+- [x] T039 Run `cd backend && pytest` (full suite) and confirm zero regressions against all pre-existing CPU contract tests
+- [x] T040 Run `cd frontend && pytest` (full suite) and confirm all integration tests pass
+- [x] T041 [P] Add Lightning AI setup instructions (API key, `LLMOPS_ENCRYPTION_KEY` reuse, `pip install lightning-sdk litserve`) to `backend/README.md`
 
 ---
 

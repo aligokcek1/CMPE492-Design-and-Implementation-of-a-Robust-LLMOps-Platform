@@ -39,8 +39,13 @@ def _seed_credentials(user_id: str = "alice") -> None:
 
 async def _run_orchestrator(deployment_id: str, provider) -> None:
     from src.services.deployment_orchestrator import deployment_orchestrator
+    from src.services.lightning_ai_fake_provider import FakeLightningAIProvider
 
-    await deployment_orchestrator.run_to_terminal(deployment_id=deployment_id, provider=provider)
+    await deployment_orchestrator.run_to_terminal(
+        deployment_id=deployment_id,
+        gcp_provider=provider,
+        lightning_ai_provider=FakeLightningAIProvider(),
+    )
 
 
 def _fetch_row(deployment_id: str):
@@ -160,8 +165,12 @@ async def test_status_refresh_marks_running_deployment_as_lost_when_project_gone
         db.commit()
 
     from src.services.deployment_orchestrator import deployment_orchestrator
+    from src.services.lightning_ai_fake_provider import FakeLightningAIProvider
 
-    await deployment_orchestrator.refresh_statuses(provider=fake_gcp_provider)
+    await deployment_orchestrator.refresh_statuses(
+        gcp_provider=fake_gcp_provider,
+        lightning_ai_provider=FakeLightningAIProvider(),
+    )
 
     row = _fetch_row(dep_id)
     assert row.status == "lost"
@@ -188,14 +197,22 @@ async def test_delete_during_deploy_transitions_through_deleting_to_deleted(
     # Using schedule() (instead of raw asyncio.create_task) mirrors what the
     # real route does and, crucially, registers the task so request_deletion
     # can cancel it.
-    deployment_orchestrator.schedule(deployment_id=dep_id, provider=fake_gcp_provider)
+    from src.services.lightning_ai_fake_provider import FakeLightningAIProvider
+    fake_lai = FakeLightningAIProvider()
+
+    deployment_orchestrator.schedule(
+        deployment_id=dep_id,
+        gcp_provider=fake_gcp_provider,
+        lightning_ai_provider=fake_lai,
+    )
 
     # Give the orchestrator time to at least create the project.
     await asyncio.sleep(0.1)
 
     await deployment_orchestrator.request_deletion(
         deployment_id=dep_id,
-        provider=fake_gcp_provider,
+        gcp_provider=fake_gcp_provider,
+        lightning_ai_provider=fake_lai,
     )
 
     row = _fetch_row(dep_id)

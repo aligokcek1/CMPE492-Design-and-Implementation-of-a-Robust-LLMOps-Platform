@@ -43,6 +43,7 @@ class DeploymentStore:
         user_id: str,
         hf_model_id: str,
         hf_model_display_name: str | None = None,
+        hardware_type: str = "cpu",
         force: bool = False,
     ) -> DeploymentRow:
         session_factory = get_session_factory()
@@ -80,30 +81,42 @@ class DeploymentStore:
 
             now = datetime.now(UTC)
             deployment_id = str(uuid.uuid4())
-            # Retry a few times on the astronomically-unlikely case of a collision
-            for attempt in range(3):
-                project_id = _allocate_gcp_project_id(deployment_id)
-                if attempt > 0:
-                    project_id = f"{project_id}-{secrets.token_hex(1)}"
-                exists = db.execute(
-                    select(DeploymentRow).where(DeploymentRow.gcp_project_id == project_id)
-                ).first()
-                if exists is None:
-                    break
+
+            if hardware_type == "cpu":
+                # Allocate a unique GCP project id for CPU deployments.
+                for attempt in range(3):
+                    project_id = _allocate_gcp_project_id(deployment_id)
+                    if attempt > 0:
+                        project_id = f"{project_id}-{secrets.token_hex(1)}"
+                    exists = db.execute(
+                        select(DeploymentRow).where(DeploymentRow.gcp_project_id == project_id)
+                    ).first()
+                    if exists is None:
+                        break
+                else:
+                    raise DeploymentError(
+                        "project_id_collision",
+                        "Could not allocate a unique GCP project id. Please retry.",
+                    )
+                gcp_project_id: str | None = project_id
+                gke_cluster_name: str | None = _DEFAULT_CLUSTER_NAME
+                gke_region: str | None = _DEFAULT_REGION
             else:
-                raise DeploymentError(
-                    "project_id_collision",
-                    "Could not allocate a unique GCP project id. Please retry.",
-                )
+                # GPU rows have no GCP project.
+                gcp_project_id = None
+                gke_cluster_name = None
+                gke_region = None
 
             row = DeploymentRow(
                 id=deployment_id,
                 user_id=user_id,
                 hf_model_id=hf_model_id,
                 hf_model_display_name=hf_model_display_name or hf_model_id.split("/")[-1],
-                gcp_project_id=project_id,
-                gke_cluster_name=_DEFAULT_CLUSTER_NAME,
-                gke_region=_DEFAULT_REGION,
+                hardware_type=hardware_type,
+                gcp_project_id=gcp_project_id,
+                gke_cluster_name=gke_cluster_name,
+                gke_region=gke_region,
+                lightning_ai_deployment_id=None,
                 status="queued",
                 status_message="Queued for deployment.",
                 created_at=now,
@@ -114,6 +127,23 @@ class DeploymentStore:
             db.refresh(row)
             db.expunge(row)
             return row
+
+    def store_lightning_deployment_id(
+        self,
+        *,
+        deployment_id: str,
+        lightning_ai_deployment_id: str,
+    ) -> None:
+        session_factory = get_session_factory()
+        with session_factory() as db:
+            row = db.execute(
+                select(DeploymentRow).where(DeploymentRow.id == deployment_id)
+            ).scalar_one_or_none()
+            if row is None:
+                return
+            row.lightning_ai_deployment_id = lightning_ai_deployment_id
+            row.updated_at = datetime.now(UTC)
+            db.commit()
 
     def update_status(
         self,
@@ -210,4 +240,5 @@ __all__ = [
     "DeploymentStore",
     "DeploymentError",
     "_MAX_CONCURRENT_PER_USER",
+    "_NON_TERMINAL_STATUSES",
 ]

@@ -1,5 +1,6 @@
 from datetime import datetime
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -50,13 +51,17 @@ class GkeDeploymentStatus(str, Enum):
 
 class DeployRequest(BaseModel):
     hf_model_id: str = Field(..., description="HuggingFace model repository ID, e.g. Qwen/Qwen3-1.7B")
-    force: bool = Field(default=False, description="Bypass the duplicate-model confirmation (FR-016).")
+    hardware_type: Literal["cpu", "gpu"] = Field(
+        ..., description="Target hardware: 'cpu' routes to GKE/TGI-CPU; 'gpu' routes to Lightning AI/vLLM."
+    )
+    force: bool = Field(default=False, description="Bypass the duplicate-model confirmation.")
 
 
 class Deployment(BaseModel):
     id: str
     hf_model_id: str
     hf_model_display_name: str
+    hardware_type: str
     status: GkeDeploymentStatus
     status_message: str | None = None
     endpoint_url: str | None = None
@@ -65,7 +70,10 @@ class Deployment(BaseModel):
 
 
 class DeploymentDetail(Deployment):
-    gcp_project_id: str
-    gke_cluster_name: str
-    gke_region: str
-    gcp_console_url: str
+    # CPU-specific fields (None for GPU deployments)
+    gcp_project_id: str | None = None
+    gke_cluster_name: str | None = None
+    gke_region: str | None = None
+    gcp_console_url: str | None = None
+    # GPU-specific field (None for CPU deployments)
+    lightning_ai_deployment_id: str | None = None

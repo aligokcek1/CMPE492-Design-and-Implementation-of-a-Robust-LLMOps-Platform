@@ -1,8 +1,9 @@
 # LLMOps Platform — Backend
 
 FastAPI service that powers the LLMOps Platform dashboard. Handles Hugging Face
-authentication, file/folder uploads, personal-repo mock deployments, and — as of
-feature **007** — real public-model inference deployments on GKE.
+authentication, file/folder uploads, personal-repo mock deployments, real public-model
+inference deployments on GKE (CPU, feature 007), and Lightning AI GPU deployments
+(feature 008).
 
 ## Setup
 
@@ -17,11 +18,22 @@ pip install -r requirements.txt
 
 | Name | Required | Purpose |
 |------|----------|---------|
-| `LLMOPS_ENCRYPTION_KEY` | **yes (feature 007)** | Fernet key used to encrypt GCP service-account JSON at rest in `backend/data/llmops.db`. Must remain stable across restarts — losing it invalidates every saved credential. |
+| `LLMOPS_ENCRYPTION_KEY` | **yes (feature 007+)** | Fernet key used to encrypt GCP service-account JSON **and Lightning AI API keys** at rest in `backend/data/llmops.db`. Must remain stable across restarts — losing it invalidates every saved credential. Generate with: `python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'` |
 | `LLMOPS_USE_FAKE_GCP` | no | Set to `1` to force the in-memory `FakeGCPProvider` even outside pytest (useful for local UI demos without a real GCP account). Never touches real cloud APIs. |
 | `LLMOPS_DATABASE_URL` | no | Override the default SQLite path (`backend/data/llmops.db`). Tests use this to point at a per-test temp file. |
 | `LLMOPS_DISABLE_STATUS_REFRESH` | no | Set to `1` to skip the background 30s status-refresh loop. Useful in test environments or when you only care about request-path behaviour. |
 | `LLMOPS_K8S_DRYRUN_KUBECONFIG` | no | Path to a scratch kubeconfig used by the opt-in `tests/dryrun/` suite to validate generated CPU inference manifests via server-side `dry_run=["All"]`. When unset, the suite is skipped. |
+
+## Routes added by feature 008
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET`    | `/api/lightning/credentials`              | Return Lightning AI key validation status (never the raw key). |
+| `POST`   | `/api/lightning/credentials`              | Save and validate a Lightning AI API key (Fernet-encrypted at rest). |
+| `DELETE` | `/api/lightning/credentials`              | Delete the stored Lightning AI API key. |
+
+The existing `POST /api/deployments` now requires a `hardware_type` field (`"cpu"` or `"gpu"`).
+CPU routes to the existing GKE/TGI-CPU path; GPU routes to Lightning AI via LitServe + vLLM.
 
 ## Routes added by feature 007
 

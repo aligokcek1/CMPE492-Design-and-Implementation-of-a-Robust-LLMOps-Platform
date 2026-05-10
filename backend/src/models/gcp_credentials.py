@@ -4,7 +4,6 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-
 _BILLING_PATTERN = r"^billingAccounts/[A-Z0-9-]{20}$"
 # Either `organizations/<digits>` or `folders/<digits>`. Empty/None means
 # unset — accepted so personal-account users who create projects without a

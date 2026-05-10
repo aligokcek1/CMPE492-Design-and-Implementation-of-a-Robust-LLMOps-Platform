@@ -160,13 +160,14 @@ async def test_create_deployment_success_202(transport, supported_hf_model):
         resp = await client.post(
             "/api/deployments",
             headers=headers,
-            json={"hf_model_id": "Qwen/Qwen3-1.7B"},
+            json={"hf_model_id": "Qwen/Qwen3-1.7B", "hardware_type": "cpu"},
         )
 
     assert resp.status_code == 202, resp.text
     body = resp.json()
     assert body["id"]
     assert body["hf_model_id"] == "Qwen/Qwen3-1.7B"
+    assert body["hardware_type"] == "cpu"
     assert body["status"] in ("queued", "deploying")
 
 
@@ -179,7 +180,7 @@ async def test_create_deployment_unsupported_model_returns_400(transport, suppor
         resp = await client.post(
             "/api/deployments",
             headers=headers,
-            json={"hf_model_id": "someone/unsupported-image-model"},
+            json={"hf_model_id": "someone/unsupported-image-model", "hardware_type": "cpu"},
         )
 
     assert resp.status_code == 400
@@ -195,7 +196,7 @@ async def test_create_deployment_requires_credentials_409(transport, supported_h
         resp = await client.post(
             "/api/deployments",
             headers=headers,
-            json={"hf_model_id": "Qwen/Qwen3-1.7B"},
+            json={"hf_model_id": "Qwen/Qwen3-1.7B", "hardware_type": "cpu"},
         )
 
     assert resp.status_code == 409
@@ -219,7 +220,7 @@ async def test_create_deployment_rejects_when_credentials_invalid_409(transport,
         resp = await client.post(
             "/api/deployments",
             headers=headers,
-            json={"hf_model_id": "Qwen/Qwen3-1.7B"},
+            json={"hf_model_id": "Qwen/Qwen3-1.7B", "hardware_type": "cpu"},
         )
 
     assert resp.status_code == 409
@@ -258,7 +259,7 @@ async def test_create_deployment_cap_reached_returns_409(transport, supported_hf
         resp = await client.post(
             "/api/deployments",
             headers=headers,
-            json={"hf_model_id": "Qwen/Qwen3-1.7B"},
+            json={"hf_model_id": "Qwen/Qwen3-1.7B", "hardware_type": "cpu"},
         )
 
     assert resp.status_code == 409
@@ -295,12 +296,12 @@ async def test_create_deployment_duplicate_model_requires_confirmation(transport
         first = await client.post(
             "/api/deployments",
             headers=headers,
-            json={"hf_model_id": "Qwen/Qwen3-1.7B"},
+            json={"hf_model_id": "Qwen/Qwen3-1.7B", "hardware_type": "cpu"},
         )
         second = await client.post(
             "/api/deployments",
             headers=headers,
-            json={"hf_model_id": "Qwen/Qwen3-1.7B", "force": True},
+            json={"hf_model_id": "Qwen/Qwen3-1.7B", "hardware_type": "cpu", "force": True},
         )
 
     assert first.status_code == 409
@@ -314,7 +315,7 @@ async def test_create_deployment_duplicate_model_requires_confirmation(transport
 @pytest.mark.asyncio
 async def test_create_deployment_requires_session_401(transport, supported_hf_model):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.post("/api/deployments", json={"hf_model_id": "Qwen/Qwen3-1.7B"})
+        resp = await client.post("/api/deployments", json={"hf_model_id": "Qwen/Qwen3-1.7B", "hardware_type": "cpu"})
     assert resp.status_code == 401
 
 
@@ -331,7 +332,7 @@ async def test_get_deployment_returns_detail_with_gcp_fields(transport, supporte
         create_resp = await client.post(
             "/api/deployments",
             headers=headers,
-            json={"hf_model_id": "Qwen/Qwen3-1.7B"},
+            json={"hf_model_id": "Qwen/Qwen3-1.7B", "hardware_type": "cpu"},
         )
         assert create_resp.status_code == 202
         dep_id = create_resp.json()["id"]
@@ -341,6 +342,7 @@ async def test_get_deployment_returns_detail_with_gcp_fields(transport, supporte
     assert detail_resp.status_code == 200
     body = detail_resp.json()
     assert body["id"] == dep_id
+    assert body["hardware_type"] == "cpu"
     assert body["gcp_project_id"].startswith("llmops-")
     assert body["gke_cluster_name"] == "llmops-cluster"
     assert body["gke_region"] == "us-central1"
@@ -452,7 +454,12 @@ async def test_list_deployments_requires_session_401(transport):
 # T054 — DELETE /api/deployments/{id}                                          #
 # --------------------------------------------------------------------------- #
 
-def _seed_row(user_id: str, status: str = "running", deployment_id: str | None = None) -> str:
+def _seed_row(
+    user_id: str,
+    status: str = "running",
+    deployment_id: str | None = None,
+    hardware_type: str = "cpu",
+) -> str:
     from datetime import UTC, datetime
 
     from src.db import get_session_factory
@@ -461,19 +468,34 @@ def _seed_row(user_id: str, status: str = "running", deployment_id: str | None =
     dep_id = deployment_id or str(uuid.uuid4())
     session_factory = get_session_factory()
     with session_factory() as db:
-        db.add(DeploymentRow(
-            id=dep_id,
-            user_id=user_id,
-            hf_model_id="Qwen/Qwen3-1.7B",
-            hf_model_display_name="Qwen3 1.7B",
-            gcp_project_id=f"llmops-{dep_id.replace('-', '')[:8]}-{dep_id.replace('-', '')[8:14]}",
-            gke_cluster_name="llmops-cluster",
-            gke_region="us-central1",
-            status=status,
-            endpoint_url="http://1.2.3.4:80" if status == "running" else None,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        ))
+        if hardware_type == "cpu":
+            db.add(DeploymentRow(
+                id=dep_id,
+                user_id=user_id,
+                hf_model_id="Qwen/Qwen3-1.7B",
+                hf_model_display_name="Qwen3 1.7B",
+                hardware_type="cpu",
+                gcp_project_id=f"llmops-{dep_id.replace('-', '')[:8]}-{dep_id.replace('-', '')[8:14]}",
+                gke_cluster_name="llmops-cluster",
+                gke_region="us-central1",
+                status=status,
+                endpoint_url="http://1.2.3.4:80" if status == "running" else None,
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            ))
+        else:
+            db.add(DeploymentRow(
+                id=dep_id,
+                user_id=user_id,
+                hf_model_id="Qwen/Qwen3-1.7B",
+                hf_model_display_name="Qwen3 1.7B",
+                hardware_type="gpu",
+                lightning_ai_deployment_id=f"lai-{dep_id[:8]}",
+                status=status,
+                endpoint_url="http://1.2.3.4:80" if status == "running" else None,
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            ))
         db.commit()
     return dep_id
 
@@ -705,3 +727,232 @@ async def test_inference_not_owner_returns_404(transport):
         )
 
     assert resp.status_code == 404
+
+
+# =========================================================================== #
+# T007 — hardware_type field validation on POST /api/deployments               #
+# =========================================================================== #
+
+@pytest.mark.asyncio
+async def test_create_deployment_without_hardware_type_returns_422(transport, supported_hf_model):
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await _session_auth_headers(client)
+        resp = await client.post(
+            "/api/deployments",
+            headers=headers,
+            json={"hf_model_id": "Qwen/Qwen3-1.7B"},
+        )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_deployment_invalid_hardware_type_returns_422(transport, supported_hf_model):
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await _session_auth_headers(client)
+        await _ensure_credentials(client, headers)
+        resp = await client.post(
+            "/api/deployments",
+            headers=headers,
+            json={"hf_model_id": "Qwen/Qwen3-1.7B", "hardware_type": "tpu"},
+        )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_list_deployments_includes_hardware_type_field(transport, supported_hf_model):
+    """GET /api/deployments returns hardware_type on every record (T007c)."""
+    from datetime import UTC, datetime
+
+    from src.db import get_session_factory
+    from src.db.models import DeploymentRow
+
+    dep_id = str(uuid.uuid4())
+    session_factory = get_session_factory()
+    with session_factory() as db:
+        db.add(DeploymentRow(
+            id=dep_id,
+            user_id="test_user",
+            hf_model_id="Qwen/Qwen3-1.7B",
+            hf_model_display_name="Qwen3 1.7B",
+            hardware_type="cpu",
+            gcp_project_id=f"llmops-{dep_id.replace('-', '')[:8]}-{dep_id.replace('-', '')[8:14]}",
+            gke_cluster_name="llmops-cluster",
+            gke_region="us-central1",
+            status="running",
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        ))
+        db.commit()
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await _session_auth_headers(client)
+        resp = await client.get("/api/deployments", headers=headers)
+
+    assert resp.status_code == 200
+    items = resp.json()
+    assert len(items) >= 1
+    for item in items:
+        assert "hardware_type" in item
+    assert any(item["id"] == dep_id and item["hardware_type"] == "cpu" for item in items)
+
+
+# =========================================================================== #
+# T016 — GPU deployment contract tests                                          #
+# =========================================================================== #
+
+@pytest.mark.asyncio
+async def test_gpu_deploy_missing_lightning_key_returns_409(transport, supported_hf_model):
+    """GPU deploy without a Lightning AI key → 409 lightning_credentials_missing."""
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await _session_auth_headers(client)
+        resp = await client.post(
+            "/api/deployments",
+            headers=headers,
+            json={"hf_model_id": "Qwen/Qwen3-1.7B", "hardware_type": "gpu"},
+        )
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["code"] == "lightning_credentials_missing"
+
+
+@pytest.mark.asyncio
+async def test_gpu_deploy_invalid_lightning_key_returns_409(transport, supported_hf_model, fake_lightning_ai_provider):
+    """GPU deploy with an invalid Lightning AI key → 409 lightning_credentials_invalid."""
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await _session_auth_headers(client)
+        # Save a valid key first, then flip it to invalid
+        await client.post(
+            "/api/lightning/credentials",
+            headers=headers,
+            json={"api_key": "lai-validkey"},
+        )
+        from src.services.lightning_ai_credentials_store import lightning_ai_credentials_store
+        await lightning_ai_credentials_store.record_key_invalid(
+            user_id="test_user",
+            error=RuntimeError("simulated revoke"),
+        )
+        resp = await client.post(
+            "/api/deployments",
+            headers=headers,
+            json={"hf_model_id": "Qwen/Qwen3-1.7B", "hardware_type": "gpu"},
+        )
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["code"] == "lightning_credentials_invalid"
+
+
+@pytest.mark.asyncio
+async def test_gpu_deploy_happy_path_202(transport, supported_hf_model, fake_lightning_ai_provider):
+    """GPU deploy with valid key returns 202 with hardware_type=gpu."""
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await _session_auth_headers(client)
+        await client.post(
+            "/api/lightning/credentials",
+            headers=headers,
+            json={"api_key": "lai-validkey"},
+        )
+        resp = await client.post(
+            "/api/deployments",
+            headers=headers,
+            json={"hf_model_id": "Qwen/Qwen3-1.7B", "hardware_type": "gpu"},
+        )
+    assert resp.status_code == 202, resp.text
+    body = resp.json()
+    assert body["hardware_type"] == "gpu"
+    assert body["status"] in ("queued", "deploying")
+
+
+@pytest.mark.asyncio
+async def test_gpu_delete_transitions_to_deleted(transport, fake_lightning_ai_provider):
+    """DELETE on a GPU deployment calls Lightning AI SDK and marks record deleted."""
+    dep_id = _seed_row("test_user", status="running", hardware_type="gpu")
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await _session_auth_headers(client)
+        # Ensure Lightning AI key is present for delete credential check
+        await client.post(
+            "/api/lightning/credentials",
+            headers=headers,
+            json={"api_key": "lai-validkey"},
+        )
+        resp = await client.delete(f"/api/deployments/{dep_id}", headers=headers)
+
+    assert resp.status_code == 202
+    assert resp.json()["status"] in ("deleting", "deleted")
+
+
+@pytest.mark.asyncio
+async def test_gpu_inference_proxy_uses_endpoint_url(transport):
+    """Inference proxy works for GPU deployment (uses stored endpoint_url, hardware-agnostic)."""
+    dep_id = _seed_row("test_user", status="running", hardware_type="gpu")
+
+    canned = {"choices": [{"message": {"role": "assistant", "content": "hi"}}]}
+    with patch("src.services.inference_proxy.forward", new_callable=AsyncMock) as mock_fwd:
+        mock_fwd.return_value = canned
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            headers = await _session_auth_headers(client)
+            resp = await client.post(
+                f"/api/deployments/{dep_id}/inference",
+                headers=headers,
+                json={"messages": [{"role": "user", "content": "hi"}]},
+            )
+    assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_mixed_hardware_concurrent_limit_409(transport, supported_hf_model, fake_lightning_ai_provider):
+    """3-deployment cap applies combined across CPU and GPU (FR-019)."""
+    from datetime import UTC, datetime
+
+    from src.db import get_session_factory
+    from src.db.models import DeploymentRow
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await _session_auth_headers(client)
+        await _ensure_credentials(client, headers)
+        await client.post("/api/lightning/credentials", headers=headers, json={"api_key": "lai-validkey"})
+
+        session_factory = get_session_factory()
+        with session_factory() as db:
+            # Seed 2 CPU + 1 GPU = 3 active deployments
+            for idx in range(2):
+                db.add(DeploymentRow(
+                    id=str(uuid.uuid4()),
+                    user_id="test_user",
+                    hf_model_id=f"some/cpu-model-{idx}",
+                    hf_model_display_name=f"CPU Model {idx}",
+                    hardware_type="cpu",
+                    gcp_project_id=f"llmops-mixed{idx}xxxxx-aaa{idx}",
+                    gke_cluster_name="llmops-cluster",
+                    gke_region="us-central1",
+                    status="running",
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
+                ))
+            db.add(DeploymentRow(
+                id=str(uuid.uuid4()),
+                user_id="test_user",
+                hf_model_id="some/gpu-model",
+                hf_model_display_name="GPU Model",
+                hardware_type="gpu",
+                lightning_ai_deployment_id="lai-existing",
+                status="running",
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            ))
+            db.commit()
+
+        # 4th attempt — either hardware_type should fail
+        cpu_resp = await client.post(
+            "/api/deployments",
+            headers=headers,
+            json={"hf_model_id": "Qwen/Qwen3-1.7B", "hardware_type": "cpu"},
+        )
+        gpu_resp = await client.post(
+            "/api/deployments",
+            headers=headers,
+            json={"hf_model_id": "Qwen/Qwen3-1.7B", "hardware_type": "gpu"},
+        )
+
+    assert cpu_resp.status_code == 409
+    assert cpu_resp.json()["detail"]["code"] == "concurrent_deployment_limit"
+    assert gpu_resp.status_code == 409
+    assert gpu_resp.json()["detail"]["code"] == "concurrent_deployment_limit"

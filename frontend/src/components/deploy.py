@@ -140,24 +140,39 @@ def render_public_repo_deploy_section() -> None:
             f"Files: {info['file_count']}  ·  Size: {_format_size(info.get('size_bytes'))}"
         )
 
-        st.caption(
-            "Public repos are deployed to a brand-new GCP project on GKE Autopilot "
-            "with an NVIDIA L4 GPU via vLLM. Monitor status under the **☁️ GCP Credentials** "
-            "tab once your credentials are configured."
+        hardware_type = st.radio(
+            "Hardware",
+            options=["CPU", "GPU"],
+            index=None,
+            horizontal=True,
+            key="public_repo_hardware_selector",
+            help=(
+                "**CPU** — deploys on GKE Autopilot via TGI (requires GCP credentials). "
+                "**GPU** — deploys on Lightning AI managed cloud via LitServe + vLLM "
+                "(requires a Lightning AI API key from the ⚡ Lightning AI tab)."
+            ),
+        )
+
+        deploy_disabled = hardware_type is None
+        deploy_label = (
+            "🚀 Deploy to GKE (CPU)" if hardware_type == "CPU"
+            else "⚡ Deploy to Lightning AI (GPU)" if hardware_type == "GPU"
+            else "🚀 Deploy"
         )
         deploy_btn = st.button(
-            "🚀 Deploy to GKE",
+            deploy_label,
             key="btn_pub_gke_deploy",
             type="primary",
             use_container_width=True,
+            disabled=deploy_disabled,
         )
-        if deploy_btn:
-            _handle_real_deploy(session_token, info["repo_id"], force=False)
+        if deploy_btn and hardware_type:
+            _handle_real_deploy(session_token, info["repo_id"], hardware_type=hardware_type.lower(), force=False)
 
         # If the previous attempt came back with a duplicate-model warning,
         # show a confirmation dialog for a second deploy of the same model.
         dup_pending = st.session_state.get("_duplicate_confirm_for")
-        if dup_pending == info["repo_id"]:
+        if dup_pending == info["repo_id"] and hardware_type:
             st.warning(
                 f"You already have a running deployment of **{info['repo_id']}**. "
                 "Deploy another copy anyway?"
@@ -165,20 +180,24 @@ def render_public_repo_deploy_section() -> None:
             col_yes, col_no = st.columns(2)
             with col_yes:
                 if st.button("Yes, deploy another", key="btn_pub_confirm_dup", use_container_width=True):
-                    _handle_real_deploy(session_token, info["repo_id"], force=True)
+                    _handle_real_deploy(
+                        session_token, info["repo_id"],
+                        hardware_type=hardware_type.lower(), force=True,
+                    )
             with col_no:
                 if st.button("Cancel", key="btn_pub_cancel_dup", use_container_width=True):
                     st.session_state.pop("_duplicate_confirm_for", None)
                     st.rerun()
 
 
-def _handle_real_deploy(session_token: str, hf_model_id: str, *, force: bool) -> None:
+def _handle_real_deploy(session_token: str, hf_model_id: str, *, hardware_type: str, force: bool) -> None:
     try:
-        result = create_deployment(session_token, hf_model_id, force=force)
+        result = create_deployment(session_token, hf_model_id, hardware_type=hardware_type, force=force)
         st.session_state.pop("_duplicate_confirm_for", None)
+        platform = "GKE (CPU)" if hardware_type == "cpu" else "Lightning AI (GPU)"
         st.success(
-            f"Deployment accepted. Status: **{result['status']}**. "
-            f"Follow its progress under the deployments list. ID: `{result['id']}`"
+            f"Deployment accepted on **{platform}**. Status: **{result['status']}**. "
+            f"Follow its progress in the Deployments tab. ID: `{result['id']}`"
         )
         st.session_state["last_deployment"] = result
     except APIError as exc:
@@ -190,10 +209,15 @@ def _handle_real_deploy(session_token: str, hf_model_id: str, *, force: bool) ->
                 "You have reached the maximum of 3 concurrent deployments. "
                 "Delete one first, then try again."
             )
+        elif exc.status_code == 409 and exc.code in ("lightning_credentials_missing", "lightning_credentials_invalid"):
+            st.error(
+                "⚡ Your Lightning AI API key is missing or invalid. "
+                "Add or update it in the **⚡ Lightning AI** tab before GPU deployment."
+            )
         elif exc.status_code == 409 and exc.code in ("credentials_missing", "credentials_invalid"):
             st.error(
                 "Your GCP credentials are missing or invalid. Update them in the "
-                "**☁️ GCP Credentials** tab before deploying."
+                "**☁️ GCP Credentials** tab before CPU deployment."
             )
         elif exc.status_code == 400 and exc.code == "unsupported_model":
             st.error(

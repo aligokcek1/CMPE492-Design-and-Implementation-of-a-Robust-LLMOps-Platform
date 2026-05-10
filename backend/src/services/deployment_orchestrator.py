@@ -39,6 +39,13 @@ from .gcp_provider import (
     GCPQuotaError,
     GCPTransientError,
 )
+from .lightning_ai_credentials_store import lightning_ai_credentials_store
+from .lightning_ai_provider import (
+    LightningAIAuthError,
+    LightningAINotFoundError,
+    LightningAIProvider,
+    LightningAIServiceError,
+)
 
 logger = logging.getLogger("llmops.orchestrator")
 
@@ -55,9 +62,16 @@ class DeploymentOrchestrator:
     # ------------------------------------------------------------------ #
     # High-level entry points                                            #
     # ------------------------------------------------------------------ #
-    def schedule(self, deployment_id: str, provider: GCPProvider) -> asyncio.Task:
+    def schedule(
+        self,
+        deployment_id: str,
+        gcp_provider: GCPProvider,
+        lightning_ai_provider: LightningAIProvider,
+    ) -> asyncio.Task:
         """Kick off the state-machine as a fire-and-forget task."""
-        task = asyncio.create_task(self.run_to_terminal(deployment_id, provider))
+        task = asyncio.create_task(
+            self.run_to_terminal(deployment_id, gcp_provider, lightning_ai_provider)
+        )
         self._active_tasks[deployment_id] = task
 
         def _cleanup(t: asyncio.Task) -> None:
@@ -66,7 +80,12 @@ class DeploymentOrchestrator:
         task.add_done_callback(_cleanup)
         return task
 
-    async def run_to_terminal(self, deployment_id: str, provider: GCPProvider) -> None:
+    async def run_to_terminal(
+        self,
+        deployment_id: str,
+        gcp_provider: GCPProvider,
+        lightning_ai_provider: LightningAIProvider,
+    ) -> None:
         """Drive ``queued → deploying → running`` or ``failed`` (with cleanup)."""
         row = deployment_store.get(deployment_id)
         if row is None:
@@ -77,6 +96,10 @@ class DeploymentOrchestrator:
             logger.info(
                 "Skipping orchestrator for %s: not in queued state (%s).", deployment_id, row.status
             )
+            return
+
+        if row.hardware_type == "gpu":
+            await self._run_lightning_ai(row, provider=lightning_ai_provider)
             return
 
         user_id = row.user_id
@@ -111,16 +134,12 @@ class DeploymentOrchestrator:
 
         try:
             await _wrap(
-                provider.create_project(user_id=user_id, deployment_id=deployment_id, project_id=project_id),
+                gcp_provider.create_project(user_id=user_id, deployment_id=deployment_id, project_id=project_id),
                 user_id=user_id,
             )
             project_created = True
             set_status("deploying", "Attaching billing account…")
 
-            # Attach billing FIRST. GCP refuses to activate any billable API
-            # (compute/container/artifact registry/etc.) on a project until a
-            # billing account is linked — so `enable_services` MUST run after
-            # this step, not before.
             billing_account_id = await credentials_store.get_billing_account_id(user_id=user_id)
             if billing_account_id is None:
                 raise GCPProviderError(
@@ -128,16 +147,16 @@ class DeploymentOrchestrator:
                 )
 
             await _wrap(
-                provider.attach_billing(project_id=project_id, billing_account_id=billing_account_id),
+                gcp_provider.attach_billing(project_id=project_id, billing_account_id=billing_account_id),
                 user_id=user_id,
             )
             set_status("deploying", "Enabling required GCP services…")
 
-            await _wrap(provider.enable_services(project_id=project_id), user_id=user_id)
+            await _wrap(gcp_provider.enable_services(project_id=project_id), user_id=user_id)
             set_status("deploying", "Provisioning GKE Autopilot cluster…")
 
             cluster_handle: ClusterHandle = await _wrap(
-                provider.create_gke_cluster(
+                gcp_provider.create_gke_cluster(
                     project_id=project_id,
                     cluster_name=row.gke_cluster_name,
                     region=row.gke_region,
@@ -147,10 +166,8 @@ class DeploymentOrchestrator:
             cluster_created = True
             set_status("deploying", "Refreshing cluster credentials…")
 
-            # Re-fetch the kubeconfig with a fresh token — the one bundled in
-            # ``cluster_handle`` may have already expired on a slow bring-up.
             fresh_kubeconfig = await _wrap(
-                provider.get_kube_config(
+                gcp_provider.get_kube_config(
                     project_id=project_id,
                     cluster_name=row.gke_cluster_name,
                     region=row.gke_region,
@@ -168,22 +185,21 @@ class DeploymentOrchestrator:
             set_status("deploying", "Deploying CPU inference server…")
 
             endpoint_url = await _apply_manifests_and_get_endpoint(
-                provider=provider,
+                provider=gcp_provider,
                 row=row,
                 cluster_handle=cluster_handle,
             )
 
-            set_status("running", "Inference server is ready.", endpoint_url=endpoint_url)
+            set_status("running", "CPU inference server is ready.", endpoint_url=endpoint_url)
             logger.info("Deployment %s reached RUNNING at %s", deployment_id, endpoint_url)
         except asyncio.CancelledError:
             logger.info("Deployment %s was cancelled by user-initiated deletion.", deployment_id)
-            # The delete flow owns the teardown; we just stop here.
             raise
         except GCPProviderError as exc:
             logger.exception("Deployment %s failed: %s", deployment_id, exc)
             set_status("failed", _format_failure_message(exc, cluster_created=cluster_created))
             if project_created and not cluster_created:
-                await _best_effort_rollback(provider, project_id)
+                await _best_effort_rollback(gcp_provider, project_id)
             elif cluster_created:
                 logger.info(
                     "Deployment %s failed AFTER cluster %s was up — leaving the "
@@ -199,7 +215,7 @@ class DeploymentOrchestrator:
                 _format_unexpected_failure_message(exc, cluster_created=cluster_created),
             )
             if project_created and not cluster_created:
-                await _best_effort_rollback(provider, project_id)
+                await _best_effort_rollback(gcp_provider, project_id)
             elif cluster_created:
                 logger.info(
                     "Deployment %s failed AFTER cluster %s was up — leaving the "
@@ -208,8 +224,82 @@ class DeploymentOrchestrator:
                     deployment_id, row.gke_cluster_name, project_id,
                 )
 
-    async def request_deletion(self, deployment_id: str, provider: GCPProvider) -> None:
-        """Cancel any in-flight deploy + tear down the project."""
+    async def _run_lightning_ai(self, row: DeploymentRow, *, provider: LightningAIProvider) -> None:
+        """Drive ``queued → deploying → running`` for a GPU/Lightning AI deployment."""
+        deployment_id = row.id
+        user_id = row.user_id
+
+        def set_status(status: str, message: str | None = None, endpoint_url: str | None = None) -> None:
+            deployment_store.update_status(
+                deployment_id=deployment_id,
+                status=status,
+                status_message=message,
+                endpoint_url=endpoint_url,
+            )
+
+        set_status("deploying", "Submitting to Lightning AI…")
+
+        api_key = await lightning_ai_credentials_store.get_decrypted_key(user_id=user_id)
+        if api_key is None:
+            set_status("failed", "Lightning AI API key was removed before deployment could start.")
+            return
+
+        try:
+            from .litserve_gpu import generate
+
+            script = generate(row.hf_model_id)
+            import os
+            import tempfile
+
+            with tempfile.NamedTemporaryFile(suffix=".py", mode="w", delete=False) as tmp:
+                tmp.write(script)
+                tmp_path = tmp.name
+
+            try:
+                lightning_ai_deployment_id, endpoint_url = await provider.deploy(
+                    hf_model_id=row.hf_model_id,
+                    api_key=api_key,
+                )
+            finally:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+
+            deployment_store.store_lightning_deployment_id(
+                deployment_id=deployment_id,
+                lightning_ai_deployment_id=lightning_ai_deployment_id,
+            )
+
+            if endpoint_url:
+                set_status("running", "GPU inference server live on Lightning AI.", endpoint_url=endpoint_url)
+                logger.info("GPU deployment %s reached RUNNING at %s", deployment_id, endpoint_url)
+            else:
+                set_status("deploying", "Waiting for GPU node to come online on Lightning AI…")
+
+        except LightningAIAuthError as exc:
+            logger.exception("GPU deployment %s failed (auth): %s", deployment_id, exc)
+            await lightning_ai_credentials_store.record_key_invalid(user_id=user_id, error=exc)
+            set_status(
+                "failed",
+                f"Lightning AI rejected the API key: {exc.message}. "
+                "Check your Lightning AI API key in the ⚡ Lightning AI tab.",
+            )
+        except (LightningAIServiceError, Exception) as exc:  # noqa: BLE001
+            logger.exception("GPU deployment %s failed: %s", deployment_id, exc)
+            set_status(
+                "failed",
+                f"Lightning AI deployment failed: {exc}. "
+                "This may be a transient error — you can retry.",
+            )
+
+    async def request_deletion(
+        self,
+        deployment_id: str,
+        gcp_provider: GCPProvider,
+        lightning_ai_provider: LightningAIProvider,
+    ) -> None:
+        """Cancel any in-flight deploy + tear down cloud resources."""
         row = deployment_store.get(deployment_id)
         if row is None:
             return
@@ -228,12 +318,18 @@ class DeploymentOrchestrator:
             with contextlib.suppress(asyncio.CancelledError):
                 await task
 
+        if row.hardware_type == "gpu":
+            await self._delete_lightning_ai(row, provider=lightning_ai_provider)
+        else:
+            await self._delete_gcp(row, provider=gcp_provider)
+
+    async def _delete_gcp(self, row: DeploymentRow, *, provider: GCPProvider) -> None:
+        deployment_id = row.id
         deployment_store.update_status(
             deployment_id=deployment_id,
             status="deleting",
             status_message="Tearing down GCP project…",
         )
-
         try:
             await _wrap(provider.delete_project(project_id=row.gcp_project_id), user_id=row.user_id)
             deployment_store.update_status(
@@ -243,7 +339,6 @@ class DeploymentOrchestrator:
                 deleted_at=datetime.now(UTC),
             )
         except GCPNotFoundError:
-            # Project already gone → treat as successful delete.
             deployment_store.update_status(
                 deployment_id=deployment_id,
                 status="deleted",
@@ -258,45 +353,140 @@ class DeploymentOrchestrator:
                 status_message=f"Delete failed: {exc.message}. You may retry.",
             )
 
-    async def refresh_statuses(self, provider: GCPProvider) -> None:
-        """Flip running/deploying deployments to ``lost`` when their project vanishes."""
+    async def _delete_lightning_ai(self, row: DeploymentRow, *, provider: LightningAIProvider) -> None:
+        deployment_id = row.id
+        deployment_store.update_status(
+            deployment_id=deployment_id,
+            status="deleting",
+            status_message="Stopping Lightning AI GPU deployment…",
+        )
+        lai_id = row.lightning_ai_deployment_id
+        if not lai_id:
+            # Never submitted — mark deleted directly.
+            deployment_store.update_status(
+                deployment_id=deployment_id,
+                status="deleted",
+                status_message="Deleted (deployment was never submitted to Lightning AI).",
+                deleted_at=datetime.now(UTC),
+            )
+            return
+
+        api_key = await lightning_ai_credentials_store.get_decrypted_key(user_id=row.user_id)
+        if api_key is None:
+            deployment_store.update_status(
+                deployment_id=deployment_id,
+                status="deleted",
+                status_message="Deleted locally (Lightning AI key unavailable for remote teardown).",
+                deleted_at=datetime.now(UTC),
+            )
+            return
+
+        try:
+            await provider.delete(deployment_id=lai_id, api_key=api_key)
+            deployment_store.update_status(
+                deployment_id=deployment_id,
+                status="deleted",
+                status_message="Lightning AI GPU deployment stopped.",
+                deleted_at=datetime.now(UTC),
+            )
+        except LightningAINotFoundError:
+            deployment_store.update_status(
+                deployment_id=deployment_id,
+                status="deleted",
+                status_message="Lightning AI deployment was already absent.",
+                deleted_at=datetime.now(UTC),
+            )
+        except (LightningAIAuthError, LightningAIServiceError, Exception) as exc:  # noqa: BLE001
+            logger.exception("Lightning AI delete of deployment %s failed: %s", deployment_id, exc)
+            deployment_store.update_status(
+                deployment_id=deployment_id,
+                status="failed",
+                status_message=f"Lightning AI delete failed: {exc}. You may retry.",
+            )
+
+    async def refresh_statuses(
+        self,
+        gcp_provider: GCPProvider,
+        lightning_ai_provider: LightningAIProvider,
+    ) -> None:
+        """Poll active deployments and update statuses from the relevant cloud provider."""
         rows = deployment_store.list_needing_status_refresh()
         for row in rows:
-            try:
-                exists = await _wrap(
-                    provider.project_exists(project_id=row.gcp_project_id),
-                    user_id=row.user_id,
-                )
-            except GCPProviderError as exc:
-                # Demote to DEBUG: the real-provider path now returns True on
-                # PermissionDenied (see gcp_real_provider.project_exists), so
-                # reaching this branch in practice means a genuinely unusual
-                # GCP condition, not a recurring permission gap. We keep the
-                # log line so it's still discoverable when debugging, just not
-                # at WARNING once every 30 s.
-                logger.debug(
-                    "Status refresh for %s (project %s) skipped: %s",
-                    row.id, row.gcp_project_id, exc,
-                )
-                continue
+            if row.hardware_type == "gpu":
+                await self._refresh_lightning_ai_status(row, provider=lightning_ai_provider)
+            else:
+                await self._refresh_gcp_status(row, provider=gcp_provider)
 
-            if not exists and row.status in ("running", "deploying"):
-                deployment_store.update_status(
-                    deployment_id=row.id,
-                    status="lost",
-                    status_message=(
-                        "The GCP project backing this deployment no longer exists "
-                        "(it was likely deleted outside the platform)."
-                    ),
-                )
+    async def _refresh_gcp_status(self, row: DeploymentRow, *, provider: GCPProvider) -> None:
+        try:
+            exists = await _wrap(
+                provider.project_exists(project_id=row.gcp_project_id),
+                user_id=row.user_id,
+            )
+        except GCPProviderError as exc:
+            logger.debug(
+                "Status refresh for %s (project %s) skipped: %s",
+                row.id, row.gcp_project_id, exc,
+            )
+            return
 
-    async def start_status_refresh_loop(self, provider_factory: Callable[[], GCPProvider]) -> None:
-        """Background coroutine that polls every 30s on FastAPI lifespan."""
+        if not exists and row.status in ("running", "deploying"):
+            deployment_store.update_status(
+                deployment_id=row.id,
+                status="lost",
+                status_message=(
+                    "The GCP project backing this deployment no longer exists "
+                    "(it was likely deleted outside the platform)."
+                ),
+            )
+
+    async def _refresh_lightning_ai_status(self, row: DeploymentRow, *, provider: LightningAIProvider) -> None:
+        lai_id = row.lightning_ai_deployment_id
+        if not lai_id:
+            return
+
+        api_key = await lightning_ai_credentials_store.get_decrypted_key(user_id=row.user_id)
+        if api_key is None:
+            return
+
+        try:
+            platform_status, message = await provider.get_status(
+                deployment_id=lai_id, api_key=api_key
+            )
+        except LightningAINotFoundError:
+            deployment_store.update_status(
+                deployment_id=row.id,
+                status="deleted",
+                status_message="Lightning AI deployment was removed externally.",
+                deleted_at=datetime.now(UTC),
+            )
+            return
+        except LightningAIAuthError as exc:
+            logger.warning("Lightning AI auth error during status refresh for %s: %s", row.id, exc)
+            await lightning_ai_credentials_store.record_key_invalid(user_id=row.user_id, error=exc)
+            return
+        except (LightningAIServiceError, Exception) as exc:  # noqa: BLE001
+            logger.debug("Lightning AI status refresh for %s skipped: %s", row.id, exc)
+            return
+
+        if platform_status != row.status or message != row.status_message:
+            update_kwargs: dict = {"status": platform_status, "status_message": message}
+            deployment_store.update_status(deployment_id=row.id, **update_kwargs)
+
+    async def start_status_refresh_loop(
+        self,
+        gcp_provider_factory: Callable[[], GCPProvider],
+        lightning_ai_provider_factory: Callable[[], LightningAIProvider],
+    ) -> None:
+        """Background coroutine that polls every 30 s on FastAPI lifespan."""
         try:
             while True:
                 await asyncio.sleep(_STATUS_REFRESH_INTERVAL_SECONDS)
                 try:
-                    await self.refresh_statuses(provider=provider_factory())
+                    await self.refresh_statuses(
+                        gcp_provider=gcp_provider_factory(),
+                        lightning_ai_provider=lightning_ai_provider_factory(),
+                    )
                 except Exception:  # noqa: BLE001 — never kill the loop
                     logger.exception("Status refresh tick failed.")
         except asyncio.CancelledError:

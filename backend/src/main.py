@@ -7,10 +7,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api import auth, deployment, gcp_credentials, models, upload
+from .api import auth, deployment, gcp_credentials, lightning_ai_credentials, models, upload
 from .api.dependencies import (  # re-exported for tests
     get_gcp_provider,
+    get_lightning_ai_provider,
     reset_gcp_provider_for_tests,
+    reset_lightning_ai_provider_for_tests,
 )
 from .api.errors import http_exception_handler
 from .db.migrations import ensure_schema
@@ -23,7 +25,10 @@ async def lifespan(_app: FastAPI):
     refresh_task: asyncio.Task | None = None
     if os.environ.get("LLMOPS_DISABLE_STATUS_REFRESH") != "1":
         refresh_task = asyncio.create_task(
-            deployment_orchestrator.start_status_refresh_loop(get_gcp_provider)
+            deployment_orchestrator.start_status_refresh_loop(
+                gcp_provider_factory=get_gcp_provider,
+                lightning_ai_provider_factory=get_lightning_ai_provider,
+            )
         )
     try:
         yield
@@ -54,6 +59,7 @@ app.include_router(models.router, prefix="/api", tags=["models"])
 app.include_router(deployment.router, prefix="/api/deployment", tags=["deployment"])
 app.include_router(deployment.real_router, prefix="/api/deployments", tags=["deployments"])
 app.include_router(gcp_credentials.router, prefix="/api/gcp/credentials", tags=["gcp"])
+app.include_router(lightning_ai_credentials.router, prefix="/api/lightning/credentials", tags=["lightning-ai"])
 
 
 @app.get("/health")
@@ -61,4 +67,10 @@ async def health_check():
     return {"status": "ok"}
 
 
-__all__ = ["app", "get_gcp_provider", "reset_gcp_provider_for_tests"]
+__all__ = [
+    "app",
+    "get_gcp_provider",
+    "reset_gcp_provider_for_tests",
+    "get_lightning_ai_provider",
+    "reset_lightning_ai_provider_for_tests",
+]

@@ -638,8 +638,8 @@ def _saved_credentials_for_user(user_id: str):
 
     from google.oauth2 import service_account
 
-    from .crypto import CryptoError
     from .credentials_store import credentials_store
+    from .crypto import CryptoError
 
     loop = asyncio.new_event_loop()
     try:
@@ -690,8 +690,8 @@ def _saved_sa_json_for_project(project_id: str) -> str:
 
     from ..db import get_session_factory
     from ..db.models import DeploymentRow
-    from .crypto import CryptoError
     from .credentials_store import credentials_store
+    from .crypto import CryptoError
 
     session_factory = get_session_factory()
     with session_factory() as db:
