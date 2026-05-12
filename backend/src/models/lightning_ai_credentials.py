@@ -6,6 +6,10 @@ from pydantic import BaseModel, Field
 
 
 class LightningAICredentialRequest(BaseModel):
+    lightning_user_id: str = Field(
+        ...,
+        description="Lightning AI platform user UUID (LIGHTNING_USER_ID). Stored plaintext.",
+    )
     api_key: str = Field(..., description="Raw Lightning AI API key. Encrypted at rest; never returned.")
 
 

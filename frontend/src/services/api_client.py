@@ -195,10 +195,12 @@ def get_lightning_credentials_status(session_token: str) -> dict[str, Any]:
     return response.json()
 
 
-def save_lightning_credentials(session_token: str, api_key: str) -> dict[str, Any]:
+def save_lightning_credentials(
+    session_token: str, lightning_user_id: str, api_key: str
+) -> dict[str, Any]:
     response = requests.post(
         f"{BACKEND_URL}/api/lightning/credentials",
-        json={"api_key": api_key},
+        json={"lightning_user_id": lightning_user_id, "api_key": api_key},
         headers=_session_headers(session_token),
         timeout=30,
     )

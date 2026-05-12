@@ -239,32 +239,17 @@ class DeploymentOrchestrator:
 
         set_status("deploying", "Submitting to Lightning AI…")
 
-        api_key = await lightning_ai_credentials_store.get_decrypted_key(user_id=user_id)
-        if api_key is None:
-            set_status("failed", "Lightning AI API key was removed before deployment could start.")
+        creds = await lightning_ai_credentials_store.get_credentials(user_id=user_id)
+        if creds is None:
+            set_status("failed", "Lightning AI credentials were removed before deployment could start.")
             return
 
         try:
-            from .litserve_gpu import generate
-
-            script = generate(row.hf_model_id)
-            import os
-            import tempfile
-
-            with tempfile.NamedTemporaryFile(suffix=".py", mode="w", delete=False) as tmp:
-                tmp.write(script)
-                tmp_path = tmp.name
-
-            try:
-                lightning_ai_deployment_id, endpoint_url = await provider.deploy(
-                    hf_model_id=row.hf_model_id,
-                    api_key=api_key,
-                )
-            finally:
-                try:
-                    os.unlink(tmp_path)
-                except OSError:
-                    pass
+            lightning_ai_deployment_id, endpoint_url = await provider.deploy(
+                hf_model_id=row.hf_model_id,
+                api_key=creds.api_key,
+                lightning_user_id=creds.lightning_user_id,
+            )
 
             deployment_store.store_lightning_deployment_id(
                 deployment_id=deployment_id,
@@ -371,18 +356,22 @@ class DeploymentOrchestrator:
             )
             return
 
-        api_key = await lightning_ai_credentials_store.get_decrypted_key(user_id=row.user_id)
-        if api_key is None:
+        creds = await lightning_ai_credentials_store.get_credentials(user_id=row.user_id)
+        if creds is None:
             deployment_store.update_status(
                 deployment_id=deployment_id,
                 status="deleted",
-                status_message="Deleted locally (Lightning AI key unavailable for remote teardown).",
+                status_message="Deleted locally (Lightning AI credentials unavailable for remote teardown).",
                 deleted_at=datetime.now(UTC),
             )
             return
 
         try:
-            await provider.delete(deployment_id=lai_id, api_key=api_key)
+            await provider.delete(
+                deployment_id=lai_id,
+                api_key=creds.api_key,
+                lightning_user_id=creds.lightning_user_id,
+            )
             deployment_store.update_status(
                 deployment_id=deployment_id,
                 status="deleted",
@@ -445,13 +434,15 @@ class DeploymentOrchestrator:
         if not lai_id:
             return
 
-        api_key = await lightning_ai_credentials_store.get_decrypted_key(user_id=row.user_id)
-        if api_key is None:
+        creds = await lightning_ai_credentials_store.get_credentials(user_id=row.user_id)
+        if creds is None:
             return
 
         try:
             platform_status, message = await provider.get_status(
-                deployment_id=lai_id, api_key=api_key
+                deployment_id=lai_id,
+                api_key=creds.api_key,
+                lightning_user_id=creds.lightning_user_id,
             )
         except LightningAINotFoundError:
             deployment_store.update_status(

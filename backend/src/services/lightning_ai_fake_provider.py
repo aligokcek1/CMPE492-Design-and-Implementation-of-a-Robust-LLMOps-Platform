@@ -33,11 +33,13 @@ class FakeLightningAIProvider:
         self._status_call_counts: dict[str, int] = {}
         self.deleted_ids: set[str] = set()
 
-    async def validate_api_key(self, *, api_key: str) -> None:
+    async def validate_api_key(self, *, api_key: str, lightning_user_id: str = "") -> None:
         if self.reject_key:
             raise LightningAIAuthError("Fake: API key rejected.")
 
-    async def deploy(self, *, hf_model_id: str, api_key: str) -> tuple[str, str | None]:
+    async def deploy(
+        self, *, hf_model_id: str, api_key: str, lightning_user_id: str = ""
+    ) -> tuple[str, str | None]:
         if self.reject_key:
             raise LightningAIAuthError("Fake: API key rejected during deploy.")
         if self.deploy_raises is not None:
@@ -50,7 +52,9 @@ class FakeLightningAIProvider:
         }
         return deployment_id, endpoint_url
 
-    async def get_status(self, *, deployment_id: str, api_key: str) -> tuple[str, str]:
+    async def get_status(
+        self, *, deployment_id: str, api_key: str, lightning_user_id: str = ""
+    ) -> tuple[str, str]:
         if deployment_id in self.deleted_ids:
             raise LightningAINotFoundError(deployment_id)
         if self.reject_key:
@@ -60,7 +64,9 @@ class FakeLightningAIProvider:
         idx = min(count, len(self.status_sequence) - 1)
         return self.status_sequence[idx]
 
-    async def delete(self, *, deployment_id: str, api_key: str) -> None:
+    async def delete(
+        self, *, deployment_id: str, api_key: str, lightning_user_id: str = ""
+    ) -> None:
         if deployment_id not in self._deployments and deployment_id not in self.deleted_ids:
             raise LightningAINotFoundError(deployment_id)
         self._deployments.pop(deployment_id, None)

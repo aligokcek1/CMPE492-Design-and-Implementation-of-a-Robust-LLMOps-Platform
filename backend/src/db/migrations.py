@@ -16,6 +16,11 @@ logger = logging.getLogger("llmops.db.migrations")
 
 _ADD_COLUMN_MIGRATIONS: tuple[tuple[str, str, str], ...] = (
     ("gcp_credentials", "gcp_parent", "ALTER TABLE gcp_credentials ADD COLUMN gcp_parent TEXT"),
+    (
+        "lightning_ai_credentials",
+        "lightning_user_id",
+        "ALTER TABLE lightning_ai_credentials ADD COLUMN lightning_user_id TEXT",
+    ),
 )
 
 

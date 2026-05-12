@@ -823,7 +823,7 @@ async def test_gpu_deploy_invalid_lightning_key_returns_409(transport, supported
         await client.post(
             "/api/lightning/credentials",
             headers=headers,
-            json={"api_key": "lai-validkey"},
+            json={"lightning_user_id": "fake-lai-uid-123", "api_key": "lai-validkey"},
         )
         from src.services.lightning_ai_credentials_store import lightning_ai_credentials_store
         await lightning_ai_credentials_store.record_key_invalid(
@@ -847,7 +847,7 @@ async def test_gpu_deploy_happy_path_202(transport, supported_hf_model, fake_lig
         await client.post(
             "/api/lightning/credentials",
             headers=headers,
-            json={"api_key": "lai-validkey"},
+            json={"lightning_user_id": "fake-lai-uid-123", "api_key": "lai-validkey"},
         )
         resp = await client.post(
             "/api/deployments",
@@ -871,7 +871,7 @@ async def test_gpu_delete_transitions_to_deleted(transport, fake_lightning_ai_pr
         await client.post(
             "/api/lightning/credentials",
             headers=headers,
-            json={"api_key": "lai-validkey"},
+            json={"lightning_user_id": "fake-lai-uid-123", "api_key": "lai-validkey"},
         )
         resp = await client.delete(f"/api/deployments/{dep_id}", headers=headers)
 
@@ -908,7 +908,11 @@ async def test_mixed_hardware_concurrent_limit_409(transport, supported_hf_model
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         headers = await _session_auth_headers(client)
         await _ensure_credentials(client, headers)
-        await client.post("/api/lightning/credentials", headers=headers, json={"api_key": "lai-validkey"})
+        await client.post(
+            "/api/lightning/credentials",
+            headers=headers,
+            json={"lightning_user_id": "fake-lai-uid-123", "api_key": "lai-validkey"},
+        )
 
         session_factory = get_session_factory()
         with session_factory() as db:

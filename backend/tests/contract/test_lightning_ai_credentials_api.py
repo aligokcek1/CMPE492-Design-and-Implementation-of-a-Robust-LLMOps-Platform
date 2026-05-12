@@ -49,7 +49,7 @@ async def test_save_valid_key_returns_configured_and_valid(transport, fake_light
         resp = await client.post(
             "/api/lightning/credentials",
             headers=headers,
-            json={"api_key": "lai-validkey123"},
+            json={"lightning_user_id": "fake-lai-uid-123", "api_key": "lai-validkey123"},
         )
 
     assert resp.status_code == 200, resp.text
@@ -68,7 +68,7 @@ async def test_save_invalid_key_returns_400(transport, fake_lightning_ai_provide
         resp = await client.post(
             "/api/lightning/credentials",
             headers=headers,
-            json={"api_key": "lai-badkey"},
+            json={"lightning_user_id": "fake-lai-uid-123", "api_key": "lai-badkey"},
         )
 
     assert resp.status_code == 400
@@ -80,7 +80,7 @@ async def test_save_credentials_requires_session_401(transport):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         resp = await client.post(
             "/api/lightning/credentials",
-            json={"api_key": "lai-validkey"},
+            json={"lightning_user_id": "fake-lai-uid-123", "api_key": "lai-validkey"},
         )
     assert resp.status_code == 401
 
@@ -93,12 +93,12 @@ async def test_replace_existing_key(transport, fake_lightning_ai_provider):
         await client.post(
             "/api/lightning/credentials",
             headers=headers,
-            json={"api_key": "lai-firstkey"},
+            json={"lightning_user_id": "fake-lai-uid-123", "api_key": "lai-firstkey"},
         )
         resp2 = await client.post(
             "/api/lightning/credentials",
             headers=headers,
-            json={"api_key": "lai-secondkey"},
+            json={"lightning_user_id": "fake-lai-uid-123", "api_key": "lai-secondkey"},
         )
         status_resp = await client.get("/api/lightning/credentials", headers=headers)
 
@@ -119,7 +119,7 @@ async def test_delete_credentials_returns_204(transport, fake_lightning_ai_provi
         await client.post(
             "/api/lightning/credentials",
             headers=headers,
-            json={"api_key": "lai-validkey"},
+            json={"lightning_user_id": "fake-lai-uid-123", "api_key": "lai-validkey"},
         )
         resp = await client.delete("/api/lightning/credentials", headers=headers)
 
@@ -133,7 +133,7 @@ async def test_delete_then_get_shows_not_configured(transport, fake_lightning_ai
         await client.post(
             "/api/lightning/credentials",
             headers=headers,
-            json={"api_key": "lai-validkey"},
+            json={"lightning_user_id": "fake-lai-uid-123", "api_key": "lai-validkey"},
         )
         await client.delete("/api/lightning/credentials", headers=headers)
         resp = await client.get("/api/lightning/credentials", headers=headers)
@@ -155,9 +155,17 @@ async def test_delete_idempotent_when_not_configured(transport):
 async def test_save_after_delete_works(transport, fake_lightning_ai_provider):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         headers = await _session_auth_headers(client)
-        await client.post("/api/lightning/credentials", headers=headers, json={"api_key": "lai-first"})
+        await client.post(
+            "/api/lightning/credentials",
+            headers=headers,
+            json={"lightning_user_id": "fake-lai-uid-123", "api_key": "lai-first"},
+        )
         await client.delete("/api/lightning/credentials", headers=headers)
-        resp = await client.post("/api/lightning/credentials", headers=headers, json={"api_key": "lai-second"})
+        resp = await client.post(
+            "/api/lightning/credentials",
+            headers=headers,
+            json={"lightning_user_id": "fake-lai-uid-123", "api_key": "lai-second"},
+        )
 
     assert resp.status_code == 200
     assert resp.json()["configured"] is True

@@ -41,6 +41,7 @@ async def save_credentials(
     try:
         status_obj = await lightning_ai_credentials_store.save(
             user_id=session.username,
+            lightning_user_id=payload.lightning_user_id,
             api_key=payload.api_key,
             provider=provider,
         )

@@ -337,7 +337,12 @@ async def deployment_inference(
         )
 
     try:
-        return await inference_proxy.forward(endpoint_url=row.endpoint_url, body=body)
+        return await inference_proxy.forward(
+            endpoint_url=row.endpoint_url,
+            body=body,
+            hardware_type=row.hardware_type,
+            model_id=row.hf_model_id,
+        )
     except httpx.ReadTimeout as exc:
         raise HTTPException(
             status_code=504,

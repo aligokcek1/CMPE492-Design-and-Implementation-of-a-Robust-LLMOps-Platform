@@ -109,6 +109,9 @@ class LightningAICredentialsRow(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    # The Lightning AI platform user UUID (e.g. from LIGHTNING_USER_ID env var).
+    # Not a secret — stored plaintext alongside the encrypted api_key.
+    lightning_user_id: Mapped[str | None] = mapped_column(String, nullable=True)
     api_key_encrypted: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     validation_status: Mapped[str] = mapped_column(String, nullable=False, default="valid")
     validation_error_message: Mapped[str | None] = mapped_column(String, nullable=True)

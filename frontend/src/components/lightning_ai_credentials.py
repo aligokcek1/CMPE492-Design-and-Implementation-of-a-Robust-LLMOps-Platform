@@ -55,13 +55,19 @@ def _render_status_panel(status: dict) -> None:
 def _render_save_form() -> None:
     with st.form("lightning_ai_credentials_form", clear_on_submit=True):
         st.markdown(
-            "Paste your **Lightning AI API key**. "
-            "The key is encrypted at rest; the backend never returns it."
+            "Paste your **Lightning AI User ID** and **API key** from your "
+            "[Lightning AI profile](https://lightning.ai/settings). "
+            "The API key is encrypted at rest and never returned by the backend."
+        )
+        lightning_user_id = st.text_input(
+            "Lightning AI User ID (LIGHTNING_USER_ID)",
+            placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+            key="lightning_ai_user_id_input",
         )
         api_key = st.text_input(
-            "Lightning AI API key",
+            "Lightning AI API key (LIGHTNING_API_KEY)",
             type="password",
-            placeholder="lai-XXXXXXXXXXXXXXXXXXXX",
+            placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
             key="lightning_ai_key_input",
         )
         submitted = st.form_submit_button(
@@ -75,14 +81,17 @@ def _render_save_form() -> None:
     if not token:
         st.error("You must be signed in to save credentials.")
         return
+    if not lightning_user_id.strip():
+        st.error("Lightning AI User ID cannot be empty.")
+        return
     if not api_key.strip():
         st.error("API key cannot be empty.")
         return
 
     try:
-        new_status = save_lightning_credentials(token, api_key.strip())
+        new_status = save_lightning_credentials(token, lightning_user_id.strip(), api_key.strip())
     except APIError as exc:
-        st.error(f"Key validation failed: {exc.detail}")
+        st.error(f"Credential validation failed: {exc.detail}")
         return
 
     st.success("Lightning AI API key saved and validated.")
