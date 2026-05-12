@@ -310,7 +310,18 @@ class RealLightningAIProvider:
                 username = user_api._get_user_by_id(lightning_user_id).username  # noqa: SLF001
                 teamspace_name = _get_teamspace_name(user_api, lightning_user_id)
                 dep = Deployment(name=deployment_id, teamspace=teamspace_name, user=username)
-                dep.stop()
+
+                if not dep.is_started:
+                    raise LightningAINotFoundError(deployment_id)
+
+                # dep.stop() only scales to zero replicas — the deployment still
+                # appears on the dashboard.  We call the underlying
+                # jobs_service_delete_deployment to fully remove it.
+                internal_dep = dep._deployment  # noqa: SLF001
+                dep._deployment_api._client.jobs_service_delete_deployment(  # noqa: SLF001
+                    project_id=internal_dep.project_id,
+                    id=internal_dep.id,
+                )
 
             except LightningAINotFoundError:
                 raise
