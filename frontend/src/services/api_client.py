@@ -172,16 +172,50 @@ def delete_gcp_credentials(session_token: str) -> None:
 def create_deployment(
     session_token: str,
     hf_model_id: str,
+    hardware_type: str,
     force: bool = False,
 ) -> dict[str, Any]:
     response = requests.post(
         f"{BACKEND_URL}/api/deployments",
-        json={"hf_model_id": hf_model_id, "force": force},
+        json={"hf_model_id": hf_model_id, "hardware_type": hardware_type, "force": force},
         headers=_session_headers(session_token),
         timeout=60,
     )
     _raise_for_status(response)
     return response.json()
+
+
+def get_lightning_credentials_status(session_token: str) -> dict[str, Any]:
+    response = requests.get(
+        f"{BACKEND_URL}/api/lightning/credentials",
+        headers=_session_headers(session_token),
+        timeout=30,
+    )
+    _raise_for_status(response)
+    return response.json()
+
+
+def save_lightning_credentials(
+    session_token: str, lightning_user_id: str, api_key: str
+) -> dict[str, Any]:
+    response = requests.post(
+        f"{BACKEND_URL}/api/lightning/credentials",
+        json={"lightning_user_id": lightning_user_id, "api_key": api_key},
+        headers=_session_headers(session_token),
+        timeout=30,
+    )
+    _raise_for_status(response)
+    return response.json()
+
+
+def delete_lightning_credentials(session_token: str) -> None:
+    response = requests.delete(
+        f"{BACKEND_URL}/api/lightning/credentials",
+        headers=_session_headers(session_token),
+        timeout=30,
+    )
+    if response.status_code != 204:
+        _raise_for_status(response)
 
 
 def get_deployment(session_token: str, deployment_id: str) -> dict[str, Any]:

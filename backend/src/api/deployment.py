@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from huggingface_hub.utils import RepositoryNotFoundError
 
 from ..api.auth_helpers import require_session
-from ..api.dependencies import get_gcp_provider
+from ..api.dependencies import get_gcp_provider, get_lightning_ai_provider
 from ..models.deployment import (
     Deployment,
     DeploymentDetail,
@@ -22,6 +22,8 @@ from ..services.deployment_orchestrator import deployment_orchestrator
 from ..services.deployment_store import DeploymentError, deployment_store
 from ..services.gcp_provider import GCPProvider
 from ..services.inference_proxy import InferenceProxyError
+from ..services.lightning_ai_credentials_store import lightning_ai_credentials_store
+from ..services.lightning_ai_provider import LightningAIProvider
 from ..services.mock_gcp import mock_deploy
 from ..services.session_store import SessionError, session_store
 
@@ -80,6 +82,7 @@ def _to_deployment_response(row) -> Deployment:
         id=row.id,
         hf_model_id=row.hf_model_id,
         hf_model_display_name=row.hf_model_display_name,
+        hardware_type=row.hardware_type,
         status=GkeDeploymentStatus(row.status),
         status_message=row.status_message,
         endpoint_url=row.endpoint_url,
@@ -90,20 +93,26 @@ def _to_deployment_response(row) -> Deployment:
 
 def _to_detail_response(row) -> DeploymentDetail:
     base = _to_deployment_response(row)
-    console_url = (
-        f"https://console.cloud.google.com/kubernetes/clusters/details/"
-        f"{row.gke_region}/{row.gke_cluster_name}?project={row.gcp_project_id}"
-    )
+    if row.hardware_type == "cpu" and row.gcp_project_id:
+        console_url = (
+            f"https://console.cloud.google.com/kubernetes/clusters/details/"
+            f"{row.gke_region}/{row.gke_cluster_name}?project={row.gcp_project_id}"
+        )
+        return DeploymentDetail(
+            **base.model_dump(),
+            gcp_project_id=row.gcp_project_id,
+            gke_cluster_name=row.gke_cluster_name,
+            gke_region=row.gke_region,
+            gcp_console_url=console_url,
+        )
+    # GPU row — Lightning AI-specific detail
     return DeploymentDetail(
         **base.model_dump(),
-        gcp_project_id=row.gcp_project_id,
-        gke_cluster_name=row.gke_cluster_name,
-        gke_region=row.gke_region,
-        gcp_console_url=console_url,
+        lightning_ai_deployment_id=row.lightning_ai_deployment_id,
     )
 
 
-async def _preflight_credentials(user_id: str) -> None:
+async def _preflight_gcp_credentials(user_id: str) -> None:
     status = await credentials_store.get_status(user_id=user_id)
     if not status.configured:
         raise HTTPException(
@@ -126,13 +135,43 @@ async def _preflight_credentials(user_id: str) -> None:
         )
 
 
+async def _preflight_lightning_credentials(user_id: str) -> None:
+    status = await lightning_ai_credentials_store.get_status(user_id=user_id)
+    if not status.configured:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "lightning_credentials_missing",
+                "message": (
+                    "No Lightning AI API key configured. Add it in the ⚡ Lightning AI tab "
+                    "before GPU deployment."
+                ),
+            },
+        )
+    if status.validation_status == "invalid":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "lightning_credentials_invalid",
+                "message": (
+                    "Your Lightning AI API key is invalid. Update it in the ⚡ Lightning AI tab "
+                    "before GPU deployment."
+                ),
+            },
+        )
+
+
 @real_router.post("", response_model=Deployment, status_code=202)
 async def create_deployment(
     payload: DeployRequest,
     session=Depends(require_session),
-    provider: GCPProvider = Depends(get_gcp_provider),
+    gcp_provider: GCPProvider = Depends(get_gcp_provider),
+    lightning_provider: LightningAIProvider = Depends(get_lightning_ai_provider),
 ) -> Deployment:
-    await _preflight_credentials(session.username)
+    if payload.hardware_type == "cpu":
+        await _preflight_gcp_credentials(session.username)
+    else:
+        await _preflight_lightning_credentials(session.username)
 
     try:
         is_supported, pipeline_tag, reason = await hf_models.is_supported_text_generation_model(
@@ -164,6 +203,7 @@ async def create_deployment(
             user_id=session.username,
             hf_model_id=payload.hf_model_id,
             hf_model_display_name=display_name,
+            hardware_type=payload.hardware_type,
             force=payload.force,
         )
     except DeploymentError as exc:
@@ -176,10 +216,12 @@ async def create_deployment(
             },
         ) from exc
 
-    # Fire-and-forget orchestrator. Tests exercise the orchestrator directly,
-    # so the background task running here is a no-op for most contract tests
-    # (which assert the 202 + DB row and return).
-    deployment_orchestrator.schedule(deployment_id=row.id, provider=provider)
+    # Fire-and-forget orchestrator — routes internally on hardware_type.
+    deployment_orchestrator.schedule(
+        deployment_id=row.id,
+        gcp_provider=gcp_provider,
+        lightning_ai_provider=lightning_provider,
+    )
 
     return _to_deployment_response(row)
 
@@ -207,31 +249,45 @@ async def get_deployment(
 async def delete_deployment(
     deployment_id: str,
     session=Depends(require_session),
-    provider: GCPProvider = Depends(get_gcp_provider),
+    gcp_provider: GCPProvider = Depends(get_gcp_provider),
+    lightning_provider: LightningAIProvider = Depends(get_lightning_ai_provider),
 ) -> Deployment:
     row = deployment_store.get(deployment_id)
     if row is None or row.user_id != session.username:
         raise HTTPException(status_code=404, detail="Deployment not found.")
 
-    # Preflight: credentials must still be valid (FR-015).
-    cred_status = await credentials_store.get_status(user_id=session.username)
-    if cred_status.validation_status == "invalid":
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "code": "credentials_invalid",
-                "message": (
-                    "Your GCP credentials are invalid. Update them before deleting deployments. "
-                    "Running deployments remain unaffected until you delete them manually here."
-                ),
-            },
-        )
+    # Preflight: the relevant credentials must still be valid before teardown.
+    if row.hardware_type == "cpu":
+        cred_status = await credentials_store.get_status(user_id=session.username)
+        if cred_status.validation_status == "invalid":
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "credentials_invalid",
+                    "message": (
+                        "Your GCP credentials are invalid. Update them before deleting deployments. "
+                        "Running deployments remain unaffected until you delete them manually here."
+                    ),
+                },
+            )
+    else:
+        lai_status = await lightning_ai_credentials_store.get_status(user_id=session.username)
+        if lai_status.configured and lai_status.validation_status == "invalid":
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "lightning_credentials_invalid",
+                    "message": (
+                        "Your Lightning AI API key is invalid. Update it in the ⚡ Lightning AI tab "
+                        "before deleting GPU deployments."
+                    ),
+                },
+            )
 
-    # Fire-and-forget teardown. Contract tests assert the 202 + updated status.
-    # The orchestrator drives the state machine synchronously-ish in tests.
     await deployment_orchestrator.request_deletion(
         deployment_id=deployment_id,
-        provider=provider,
+        gcp_provider=gcp_provider,
+        lightning_ai_provider=lightning_provider,
     )
 
     updated = deployment_store.get(deployment_id)
@@ -241,6 +297,7 @@ async def delete_deployment(
             id=deployment_id,
             hf_model_id=row.hf_model_id,
             hf_model_display_name=row.hf_model_display_name,
+            hardware_type=row.hardware_type,
             status=GkeDeploymentStatus.deleted,
             status_message="Removed.",
             endpoint_url=None,
@@ -280,7 +337,12 @@ async def deployment_inference(
         )
 
     try:
-        return await inference_proxy.forward(endpoint_url=row.endpoint_url, body=body)
+        return await inference_proxy.forward(
+            endpoint_url=row.endpoint_url,
+            body=body,
+            hardware_type=row.hardware_type,
+            model_id=row.hf_model_id,
+        )
     except httpx.ReadTimeout as exc:
         raise HTTPException(
             status_code=504,

@@ -102,8 +102,12 @@ async def test_auth_failure_in_background_flips_credentials_to_invalid(
     fake_gcp_provider.fail_on("project_exists", GCPAuthError("permission_denied"))
 
     from src.services.deployment_orchestrator import deployment_orchestrator
+    from src.services.lightning_ai_fake_provider import FakeLightningAIProvider
 
-    await deployment_orchestrator.refresh_statuses(provider=fake_gcp_provider)
+    await deployment_orchestrator.refresh_statuses(
+        gcp_provider=fake_gcp_provider,
+        lightning_ai_provider=FakeLightningAIProvider(),
+    )
 
     assert _read_validation_status("alice") == "invalid"
 
@@ -148,7 +152,7 @@ async def test_post_and_delete_blocked_after_credentials_flipped_invalid(
             post_resp = await client.post(
                 "/api/deployments",
                 headers=_bearer(token),
-                json={"hf_model_id": "Qwen/Qwen3-1.7B"},
+                json={"hf_model_id": "Qwen/Qwen3-1.7B", "hardware_type": "cpu"},
             )
             delete_resp = await client.delete(
                 f"/api/deployments/{running_id}",

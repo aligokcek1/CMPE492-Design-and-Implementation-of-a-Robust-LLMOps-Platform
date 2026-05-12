@@ -103,14 +103,20 @@ def _render_inference_panel(deployment_id: str, endpoint_url: str | None) -> Non
                 st.json(result)
 
 
+def _hardware_badge(dep: dict[str, Any]) -> str:
+    hw = dep.get("hardware_type", "cpu")
+    return "⚙️ CPU / GKE" if hw == "cpu" else "⚡ GPU / Lightning AI"
+
+
 def _render_single_deployment(dep: dict[str, Any]) -> None:
     dep_id = dep["id"]
     status = dep["status"]
+    hw = dep.get("hardware_type", "cpu")
     with st.container(border=True):
         cols = st.columns([3, 2, 3])
         with cols[0]:
             st.markdown(f"**{dep.get('hf_model_display_name') or dep['hf_model_id']}**")
-            st.caption(f"`{dep['hf_model_id']}`")
+            st.caption(f"`{dep['hf_model_id']}`  ·  {_hardware_badge(dep)}")
         with cols[1]:
             st.markdown(_format_status(status))
             if dep.get("status_message"):
@@ -136,8 +142,9 @@ def _render_single_deployment(dep: dict[str, Any]) -> None:
                     st.rerun()
 
         if st.session_state.get(f"_confirm_delete_{dep_id}"):
+            platform = "GCP project" if hw == "cpu" else "Lightning AI deployment"
             st.warning(
-                f"Really delete deployment `{dep_id[:8]}` and tear down its GCP project? "
+                f"Really delete `{dep_id[:8]}` and tear down its {platform}? "
                 "This cannot be undone."
             )
             c_yes, c_no = st.columns(2)

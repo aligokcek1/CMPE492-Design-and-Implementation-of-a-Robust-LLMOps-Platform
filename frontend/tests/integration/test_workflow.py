@@ -195,11 +195,10 @@ def test_upload_shows_per_folder_progress(at):
 # ---------------------------------------------------------------------------
 # T030: Spinner visible during public repo deployment
 # ---------------------------------------------------------------------------
-def test_public_deploy_shows_gke_deploy_button(at):
-    """After feature 007 / T042a, public-repo deploys go to GKE Autopilot
-    with fixed cheapest-settings (L4 GPU, no user config). Per FR-004 there
-    are no CPU/GPU selectors in the public-repo panel anymore — there's a
-    single "Deploy to GKE" button.
+def test_public_deploy_shows_hardware_selector_and_deploy_button(at):
+    """Feature 008: public-repo panel shows CPU/GPU radio selector.
+    Before selection, the Deploy button is disabled. After selecting CPU,
+    button label reflects the choice.
     """
     at.session_state["session_token"] = "session_valid"
     at.session_state["hf_username"] = "testuser"
@@ -212,15 +211,18 @@ def test_public_deploy_shows_gke_deploy_button(at):
         "size_bytes": 440473133,
     }
     with patch("src.services.api_client.requests.get") as mock_get:
-        # /api/gcp/credentials status check
         mock_get.return_value = MagicMock(
             ok=True,
             json=lambda: {"configured": True, "validation_status": "valid"},
         )
         at.run()
     assert not at.exception
-    deploy_buttons = [b for b in at.button if "deploy to gke" in b.label.lower()]
-    assert len(deploy_buttons) >= 1, "Expected 'Deploy to GKE' button after T042a"
+    # Deploy button should be present (disabled until hardware selected)
+    deploy_buttons = [b for b in at.button if "deploy" in b.label.lower()]
+    assert len(deploy_buttons) >= 1, "Expected a Deploy button in the public-repo panel"
+    # The Deploy button should be disabled (no hardware type selected yet)
+    deploy_btn = deploy_buttons[0]
+    assert deploy_btn.disabled, "Deploy button should be disabled before hardware type is selected"
 
 
 def test_retry_without_duplicate_uses_same_idempotency_key(at):

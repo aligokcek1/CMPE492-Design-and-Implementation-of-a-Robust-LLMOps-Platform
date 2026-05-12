@@ -1,8 +1,11 @@
 """Inference proxy with a hard 120s read timeout (SC-008).
 
-The deployed runtime is Hugging Face TGI on CPU (`/generate` API), while the
-frontend expects an OpenAI-style `choices[0].message.content` payload. This
-module bridges the two so UI/API contracts remain stable.
+Routes to the correct upstream API based on hardware type:
+- CPU  → HuggingFace TGI at ``/generate``  (``{"inputs": prompt}``)
+- GPU  → vLLM OpenAI-compat at ``/v1/chat/completions``
+
+Both paths present an OpenAI-style ``choices[0].message.content`` response to
+the caller so the UI/API contract stays uniform.
 """
 from __future__ import annotations
 
@@ -27,16 +30,43 @@ class InferenceProxyError(Exception):
         self.status_code = status_code
 
 
-async def forward(*, endpoint_url: str, body: dict) -> dict:
-    """Forward an OpenAI-style chat payload to the deployed TGI endpoint.
+async def forward(
+    *,
+    endpoint_url: str,
+    body: dict,
+    hardware_type: str = "cpu",
+    model_id: str | None = None,
+) -> dict:
+    """Forward an OpenAI-style chat payload to the deployed inference endpoint.
+
+    Args:
+        endpoint_url: Base URL of the running deployment.
+        body: OpenAI-style request body (``messages``, optional ``max_tokens`` /
+            ``temperature``).
+        hardware_type: ``"cpu"`` routes to TGI ``/generate``; ``"gpu"`` routes
+            to vLLM ``/v1/chat/completions``.
+        model_id: HuggingFace model ID passed as the ``model`` field for vLLM
+            (ignored for CPU/TGI).
 
     Raises:
-        httpx.ReadTimeout: the upstream didn't respond within 120s (SC-008).
+        httpx.ReadTimeout: upstream did not respond within 120 s (SC-008).
         InferenceProxyError: any other non-2xx upstream response.
     """
+    if hardware_type == "gpu":
+        return await _forward_vllm(
+            endpoint_url=endpoint_url, body=body, model_id=model_id or "default"
+        )
+    return await _forward_tgi(endpoint_url=endpoint_url, body=body)
+
+
+# ---------------------------------------------------------------------------
+# CPU path — HuggingFace TGI
+# ---------------------------------------------------------------------------
+
+async def _forward_tgi(*, endpoint_url: str, body: dict) -> dict:
     url = endpoint_url.rstrip("/") + "/generate"
     prompt = _messages_to_prompt(body.get("messages", []))
-    parameters = {}
+    parameters: dict = {}
     if "max_tokens" in body:
         parameters["max_new_tokens"] = body["max_tokens"]
     if "temperature" in body:
@@ -44,7 +74,7 @@ async def forward(*, endpoint_url: str, body: dict) -> dict:
     if parameters.get("temperature", 1.0) == 0:
         parameters["do_sample"] = False
 
-    tgi_payload = {"inputs": prompt}
+    tgi_payload: dict = {"inputs": prompt}
     if parameters:
         tgi_payload["parameters"] = parameters
 
@@ -68,6 +98,50 @@ async def forward(*, endpoint_url: str, body: dict) -> dict:
         )
     return _to_openai_chat_response(text)
 
+
+# ---------------------------------------------------------------------------
+# GPU path — vLLM OpenAI-compatible server
+# ---------------------------------------------------------------------------
+
+async def _forward_vllm(*, endpoint_url: str, body: dict, model_id: str) -> dict:
+    url = endpoint_url.rstrip("/") + "/v1/chat/completions"
+
+    messages = body.get("messages", [])
+    if not messages:
+        raise InferenceProxyError(
+            code="invalid_request",
+            message="Request must include at least one message.",
+            status_code=400,
+        )
+
+    vllm_payload: dict = {
+        "model": model_id,
+        "messages": messages,
+    }
+    if "max_tokens" in body:
+        vllm_payload["max_tokens"] = body["max_tokens"]
+    if "temperature" in body:
+        vllm_payload["temperature"] = body["temperature"]
+    if "stream" in body:
+        vllm_payload["stream"] = body["stream"]
+
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        response = await client.post(url, json=vllm_payload)
+
+    if response.status_code >= 400:
+        raise InferenceProxyError(
+            code="upstream_error",
+            message=f"Upstream returned {response.status_code}: {response.text[:500]}",
+            status_code=response.status_code,
+        )
+
+    # vLLM already returns an OpenAI-format response — pass it straight through.
+    return response.json()
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def _messages_to_prompt(messages: list[dict]) -> str:
     if not messages:

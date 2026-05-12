@@ -21,6 +21,7 @@ def _now() -> datetime:
 
 
 VALIDATION_STATUSES = ("valid", "invalid")
+HARDWARE_TYPES = ("cpu", "gpu")
 DEPLOYMENT_STATUSES = (
     "queued",
     "deploying",
@@ -68,6 +69,10 @@ class DeploymentRow(Base):
             f"status IN {DEPLOYMENT_STATUSES}",
             name="ck_deployments_status",
         ),
+        CheckConstraint(
+            f"hardware_type IN {HARDWARE_TYPES}",
+            name="ck_deployments_hardware_type",
+        ),
         Index("ix_deployments_user_id", "user_id"),
         Index("ix_deployments_user_status", "user_id", "status"),
     )
@@ -76,9 +81,14 @@ class DeploymentRow(Base):
     user_id: Mapped[str] = mapped_column(String, nullable=False)
     hf_model_id: Mapped[str] = mapped_column(String, nullable=False)
     hf_model_display_name: Mapped[str] = mapped_column(String, nullable=False)
-    gcp_project_id: Mapped[str] = mapped_column(String, nullable=False, unique=True)
-    gke_cluster_name: Mapped[str] = mapped_column(String, nullable=False)
-    gke_region: Mapped[str] = mapped_column(String, nullable=False)
+    hardware_type: Mapped[str] = mapped_column(String, nullable=False, default="cpu")
+    # GCP/GKE fields — nullable for GPU rows that have no GCP project.
+    # SQLite allows multiple NULLs in a UNIQUE column, so the constraint is retained.
+    gcp_project_id: Mapped[str | None] = mapped_column(String, nullable=True, unique=True)
+    gke_cluster_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    gke_region: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Lightning AI field — null for CPU rows.
+    lightning_ai_deployment_id: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String, nullable=False, default="queued")
     status_message: Mapped[str | None] = mapped_column(String, nullable=True)
     endpoint_url: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -87,9 +97,34 @@ class DeploymentRow(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class LightningAICredentialsRow(Base):
+    __tablename__ = "lightning_ai_credentials"
+    __table_args__ = (
+        UniqueConstraint("user_id", name="uq_lightning_ai_credentials_user_id"),
+        CheckConstraint(
+            f"validation_status IN {VALIDATION_STATUSES}",
+            name="ck_lightning_ai_credentials_validation_status",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    # The Lightning AI platform user UUID (e.g. from LIGHTNING_USER_ID env var).
+    # Not a secret — stored plaintext alongside the encrypted api_key.
+    lightning_user_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    api_key_encrypted: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    validation_status: Mapped[str] = mapped_column(String, nullable=False, default="valid")
+    validation_error_message: Mapped[str | None] = mapped_column(String, nullable=True)
+    last_validated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
+
+
 __all__ = [
     "GCPCredentialsRow",
     "DeploymentRow",
+    "LightningAICredentialsRow",
     "VALIDATION_STATUSES",
+    "HARDWARE_TYPES",
     "DEPLOYMENT_STATUSES",
 ]

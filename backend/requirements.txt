@@ -15,3 +15,5 @@ google-cloud-service-usage>=1.13
 google-api-python-client>=2.140
 google-auth>=2.30
 kubernetes>=30.0
+lightning-sdk>=0.20.0
+litserve>=0.2.0

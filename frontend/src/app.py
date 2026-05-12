@@ -15,9 +15,11 @@ from src.components.upload import render_upload_section, render_model_selector  
 from src.components.deploy import render_deployment_section, render_public_repo_deploy_section  # noqa: E402
 from src.components.deployments_list import render_deployments_list  # noqa: E402
 from src.components.gcp_credentials import render_gcp_credentials_section  # noqa: E402
+from src.components.lightning_ai_credentials import render_lightning_ai_credentials_section  # noqa: E402
 from src.services.api_client import (  # noqa: E402
     APIError,
     get_gcp_credentials_status,
+    get_lightning_credentials_status,
     get_session_status,
     logout,
 )
@@ -66,21 +68,32 @@ def _try_restore_session() -> None:
 
 
 def _render_credentials_invalid_banner() -> None:
-    """Persistent FR-015 warning: new deploys/deletes blocked until creds updated."""
+    """Persistent warning for invalid GCP or Lightning AI credentials."""
     token = get_session_token()
     if not token:
         return
     try:
-        status = get_gcp_credentials_status(token)
+        gcp_status = get_gcp_credentials_status(token)
+        if gcp_status.get("configured") and gcp_status.get("validation_status") == "invalid":
+            st.warning(
+                "⚠️ **Your GCP credentials are invalid.** "
+                "New CPU deployments and deletions are blocked until you update them "
+                "in the **☁️ GCP Credentials** tab. Already-running deployments are unaffected.",
+                icon="⚠️",
+            )
     except Exception:
-        return
-    if status.get("configured") and status.get("validation_status") == "invalid":
-        st.warning(
-            "⚠️ **Your GCP credentials are invalid.** "
-            "New deployments and deletions are blocked until you update them "
-            "in the **☁️ GCP Credentials** tab. Already-running deployments are unaffected.",
-            icon="⚠️",
-        )
+        pass
+    try:
+        lai_status = get_lightning_credentials_status(token)
+        if lai_status.get("configured") and lai_status.get("validation_status") == "invalid":
+            st.warning(
+                "⚡ **Your Lightning AI API key is invalid.** "
+                "New GPU deployments are blocked until you update it "
+                "in the **⚡ Lightning AI** tab.",
+                icon="⚠️",
+            )
+    except Exception:
+        pass
 
 
 def render_sidebar() -> None:
@@ -131,13 +144,14 @@ def main() -> None:
 
     _render_credentials_invalid_banner()
 
-    tab_upload, tab_select, tab_deploy, tab_deployments, tab_gcp = st.tabs(
+    tab_upload, tab_select, tab_deploy, tab_deployments, tab_gcp, tab_lightning = st.tabs(
         [
             "📤 Upload Model",
             "🔍 Select Existing",
             "🚀 Deploy",
             "📊 Deployments",
             "☁️ GCP Credentials",
+            "⚡ Lightning AI",
         ]
     )
 
@@ -177,6 +191,12 @@ def main() -> None:
             render_gcp_credentials_section()
         except Exception as exc:
             st.error(f"An unexpected error occurred in the GCP credentials section: {exc}")
+
+    with tab_lightning:
+        try:
+            render_lightning_ai_credentials_section()
+        except Exception as exc:
+            st.error(f"An unexpected error occurred in the Lightning AI credentials section: {exc}")
 
 
 if __name__ == "__main__":

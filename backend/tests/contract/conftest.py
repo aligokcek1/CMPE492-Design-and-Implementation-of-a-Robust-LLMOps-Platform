@@ -38,17 +38,34 @@ def fake_gcp_provider():
 
 
 @pytest.fixture
-def app_with_overrides(temp_db, fake_gcp_provider):
-    """Yields the FastAPI app with GCPProvider swapped for the in-memory fake."""
-    from src.main import app, get_gcp_provider, reset_gcp_provider_for_tests
+def fake_lightning_ai_provider():
+    from src.services.lightning_ai_fake_provider import FakeLightningAIProvider
+
+    return FakeLightningAIProvider()
+
+
+@pytest.fixture
+def app_with_overrides(temp_db, fake_gcp_provider, fake_lightning_ai_provider):
+    """Yields the FastAPI app with both GCPProvider and LightningAIProvider swapped for fakes."""
+    from src.main import (
+        app,
+        get_gcp_provider,
+        get_lightning_ai_provider,
+        reset_gcp_provider_for_tests,
+        reset_lightning_ai_provider_for_tests,
+    )
 
     reset_gcp_provider_for_tests()
+    reset_lightning_ai_provider_for_tests()
     app.dependency_overrides[get_gcp_provider] = lambda: fake_gcp_provider
+    app.dependency_overrides[get_lightning_ai_provider] = lambda: fake_lightning_ai_provider
     try:
         yield app
     finally:
         app.dependency_overrides.pop(get_gcp_provider, None)
+        app.dependency_overrides.pop(get_lightning_ai_provider, None)
         reset_gcp_provider_for_tests()
+        reset_lightning_ai_provider_for_tests()
 
 
 @pytest.fixture
