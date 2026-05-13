@@ -115,7 +115,8 @@ def _render_single_deployment(dep: dict[str, Any]) -> None:
     with st.container(border=True):
         cols = st.columns([3, 2, 3])
         with cols[0]:
-            st.markdown(f"**{dep.get('hf_model_display_name') or dep['hf_model_id']}**")
+            origin_badge = "  ·  📤 **My Upload**" if dep.get("model_origin") == "uploaded" else ""
+            st.markdown(f"**{dep.get('hf_model_display_name') or dep['hf_model_id']}**{origin_badge}")
             st.caption(f"`{dep['hf_model_id']}`  ·  {_hardware_badge(dep)}")
         with cols[1]:
             st.markdown(_format_status(status))

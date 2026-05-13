@@ -62,6 +62,7 @@ class Deployment(BaseModel):
     hf_model_id: str
     hf_model_display_name: str
     hardware_type: str
+    model_origin: str = "public"
     status: GkeDeploymentStatus
     status_message: str | None = None
     endpoint_url: str | None = None

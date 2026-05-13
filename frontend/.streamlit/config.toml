@@ -1,0 +1,5 @@
+[server]
+# Maximum size (MB) allowed for a single uploaded file.
+# Streamlit default is 200 MB. Raised here to 10 GB to support large model files.
+# For even larger files, consider using the HuggingFace CLI directly.
+maxUploadSize = 10000

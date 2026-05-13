@@ -31,6 +31,7 @@ DEPLOYMENT_STATUSES = (
     "deleted",
     "lost",
 )
+MODEL_ORIGINS = ("uploaded", "public")
 
 
 class GCPCredentialsRow(Base):
@@ -73,6 +74,10 @@ class DeploymentRow(Base):
             f"hardware_type IN {HARDWARE_TYPES}",
             name="ck_deployments_hardware_type",
         ),
+        CheckConstraint(
+            f"model_origin IN {MODEL_ORIGINS}",
+            name="ck_deployments_model_origin",
+        ),
         Index("ix_deployments_user_id", "user_id"),
         Index("ix_deployments_user_status", "user_id", "status"),
     )
@@ -89,6 +94,7 @@ class DeploymentRow(Base):
     gke_region: Mapped[str | None] = mapped_column(String, nullable=True)
     # Lightning AI field — null for CPU rows.
     lightning_ai_deployment_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    model_origin: Mapped[str] = mapped_column(String, nullable=False, default="public")
     status: Mapped[str] = mapped_column(String, nullable=False, default="queued")
     status_message: Mapped[str | None] = mapped_column(String, nullable=True)
     endpoint_url: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -127,4 +133,5 @@ __all__ = [
     "VALIDATION_STATUSES",
     "HARDWARE_TYPES",
     "DEPLOYMENT_STATUSES",
+    "MODEL_ORIGINS",
 ]

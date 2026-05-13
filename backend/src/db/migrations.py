@@ -21,6 +21,11 @@ _ADD_COLUMN_MIGRATIONS: tuple[tuple[str, str, str], ...] = (
         "lightning_user_id",
         "ALTER TABLE lightning_ai_credentials ADD COLUMN lightning_user_id TEXT",
     ),
+    (
+        "deployments",
+        "model_origin",
+        "ALTER TABLE deployments ADD COLUMN model_origin TEXT NOT NULL DEFAULT 'public'",
+    ),
 )
 
 

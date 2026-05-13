@@ -211,6 +211,52 @@ async def test_upload_idempotency_replay_returns_same_response(transport):
     assert mock_upload.call_count == 1
 
 
+# =========================================================================== #
+# 009 — deploy_shortcut in upload response (T020, T021)                        #
+# =========================================================================== #
+
+# T020 — successful upload includes deploy_shortcut = repository_id
+@pytest.mark.asyncio
+async def test_upload_start_response_includes_deploy_shortcut(transport):
+    folder_results = [
+        FolderUploadResult(folder_name="weights", status="success"),
+    ]
+    with patch("src.api.upload.upload_model_folder", new_callable=AsyncMock) as mock_upload:
+        mock_upload.return_value = folder_results
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            headers = await _session_auth_headers(client)
+            response = await client.post(
+                "/api/upload/start",
+                data={"repository_id": "testuser/my-model"},
+                files=_make_files(["weights/model.bin"]),
+                headers=headers,
+            )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data.get("deploy_shortcut") == "testuser/my-model"
+
+
+# T021 — root-only upload (no folder results) still sets deploy_shortcut
+@pytest.mark.asyncio
+async def test_upload_root_files_only_sets_deploy_shortcut(transport):
+    """Root-level upload returns empty folder_results but deploy_shortcut is still set."""
+    with patch("src.api.upload.upload_model_folder", new_callable=AsyncMock) as mock_upload:
+        mock_upload.return_value = []
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            headers = await _session_auth_headers(client)
+            response = await client.post(
+                "/api/upload/start",
+                data={"repository_id": "testuser/flat-model"},
+                files=_make_files(["model.bin"]),
+                headers=headers,
+            )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data.get("deploy_shortcut") == "testuser/flat-model"
+
+
 @pytest.mark.asyncio
 async def test_upload_idempotency_conflict_on_different_payload(transport):
     with patch("src.api.upload.upload_model_folder", new_callable=AsyncMock) as mock_upload:

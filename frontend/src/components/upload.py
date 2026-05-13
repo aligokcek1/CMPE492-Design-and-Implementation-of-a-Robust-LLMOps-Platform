@@ -5,8 +5,6 @@ import streamlit as st
 from src.services.api_client import start_upload, list_models, APIError
 from src.services.session_client import get_session_token
 
-MAX_UPLOAD_BYTES: int = 5 * 1024 * 1024 * 1024  # 5 GB
-
 
 def _strip_top_dir(name: str) -> str:
     """Strip the top-level directory from a webkitRelativePath-style name.
@@ -104,15 +102,6 @@ def render_upload_section() -> None:
             st.error("Please provide a valid repository ID (e.g. username/my-model).")
             return
 
-        total_bytes = sum(f.size for _, f in all_files)
-        if total_bytes > MAX_UPLOAD_BYTES:
-            st.error(
-                "Total upload size exceeds the platform limit "
-                f"({MAX_UPLOAD_BYTES / (1024**3):.0f} GB). "
-                "Please reduce the number or size of files."
-            )
-            return
-
         request_key = st.session_state.get("_request_nonce")
         if not request_key:
             request_key = str(uuid.uuid4())
@@ -129,11 +118,17 @@ def render_upload_section() -> None:
                 st.session_state["selected_model"] = repo_name
                 st.session_state["upload_result"] = result
                 st.session_state.pop("_request_nonce", None)
+                if result.get("deploy_shortcut"):
+                    st.session_state["shortcut_deploy_model"] = result["deploy_shortcut"]
                 st.toast(f"Model uploaded! Session: {result['session_id']}", icon="✅")
                 st.success(
                     f"Successfully uploaded to **{repo_name}**. "
                     f"Session ID: `{result['session_id']}`"
                 )
+                if result.get("deploy_shortcut"):
+                    st.info(
+                        "✅ Model uploaded! Go to the **🚀 Deploy** tab to deploy it immediately."
+                    )
             except APIError as exc:
                 st.session_state.pop("upload_result", None)
                 if exc.status_code == 401:
@@ -168,6 +163,11 @@ def render_upload_section() -> None:
 def render_model_selector() -> None:
     """Render the existing HF model selection UI."""
     st.subheader("Or Select an Existing Hugging Face Model")
+    st.markdown("### 📤 My Uploads")
+    st.caption(
+        "All models below are from your HuggingFace account. "
+        "They include both privately uploaded models and any public repos you own."
+    )
     session_token = get_session_token()
 
     if st.button("Refresh My Models", key="btn_refresh_models"):
@@ -205,5 +205,8 @@ def render_model_selector() -> None:
 
     if st.button("Use Selected Model", key="btn_use_model", use_container_width=True):
         st.session_state["selected_model"] = selected
+        st.session_state["shortcut_deploy_model"] = selected
         st.toast(f"Selected model: {selected}", icon="🤗")
-        st.success(f"Using model: **{selected}**")
+        st.success(
+            f"Model **{selected}** selected. Go to the **🚀 Deploy to Cloud** tab to deploy it."
+        )

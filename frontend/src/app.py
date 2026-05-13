@@ -12,7 +12,7 @@ import streamlit as st  # noqa: E402
 
 from src.components.auth import render_login  # noqa: E402
 from src.components.upload import render_upload_section, render_model_selector  # noqa: E402
-from src.components.deploy import render_deployment_section, render_public_repo_deploy_section  # noqa: E402
+from src.components.deploy import render_public_repo_deploy_section  # noqa: E402
 from src.components.deployments_list import render_deployments_list  # noqa: E402
 from src.components.gcp_credentials import render_gcp_credentials_section  # noqa: E402
 from src.components.lightning_ai_credentials import render_lightning_ai_credentials_section  # noqa: E402
@@ -148,7 +148,7 @@ def main() -> None:
         [
             "📤 Upload Model",
             "🔍 Select Existing",
-            "🚀 Deploy",
+            "🚀 Deploy to Cloud",
             "📊 Deployments",
             "☁️ GCP Credentials",
             "⚡ Lightning AI",
@@ -169,16 +169,9 @@ def main() -> None:
 
     with tab_deploy:
         try:
-            render_deployment_section()
-        except Exception as exc:
-            st.error(f"An unexpected error occurred in the deployment section: {exc}")
-
-        st.divider()
-
-        try:
             render_public_repo_deploy_section()
         except Exception as exc:
-            st.error(f"An unexpected error occurred in the public deploy section: {exc}")
+            st.error(f"An unexpected error occurred in the deploy section: {exc}")
 
     with tab_deployments:
         try:

@@ -52,9 +52,12 @@ class LightningAIProvider(Protocol):
         ...
 
     async def deploy(
-        self, *, hf_model_id: str, api_key: str, lightning_user_id: str
+        self, *, hf_model_id: str, api_key: str, lightning_user_id: str, hf_token: str = ""
     ) -> tuple[str, str | None]:
         """Submit a vLLM deployment on Lightning AI.
+
+        *hf_token* is injected as the ``HF_TOKEN`` environment variable in the
+        deployment container so it can pull private and gated HF models.
 
         Returns (deployment_name, endpoint_url_or_None).
         The endpoint URL is None while the GPU node is still starting.
@@ -181,14 +184,14 @@ class RealLightningAIProvider:
                 _restore_lightning_env(saved)
 
     async def deploy(
-        self, *, hf_model_id: str, api_key: str, lightning_user_id: str
+        self, *, hf_model_id: str, api_key: str, lightning_user_id: str, hf_token: str = ""
     ) -> tuple[str, str | None]:
         import asyncio
 
-        return await asyncio.to_thread(self._sync_deploy, hf_model_id, api_key, lightning_user_id)
+        return await asyncio.to_thread(self._sync_deploy, hf_model_id, api_key, lightning_user_id, hf_token)
 
     def _sync_deploy(
-        self, hf_model_id: str, api_key: str, lightning_user_id: str
+        self, hf_model_id: str, api_key: str, lightning_user_id: str, hf_token: str = ""
     ) -> tuple[str, str | None]:
         with _env_lock:
             saved = _set_lightning_env(lightning_user_id, api_key)
@@ -207,11 +210,15 @@ class RealLightningAIProvider:
                 app_name = f"llmops-{slug}"
 
                 dep = Deployment(name=app_name, teamspace=teamspace_name, user=username)
+                env: dict[str, str] = {}
+                if hf_token:
+                    env["HF_TOKEN"] = hf_token
                 dep.start(
                     machine=Machine.T4,
                     image="vllm/vllm-openai:latest",
                     command=f"--model {hf_model_id} --host 0.0.0.0 --port 8000",
                     ports=[8000],
+                    **({"env": env} if env else {}),
                 )
 
                 urls = dep.urls

@@ -3,7 +3,6 @@ from src.services.api_client import (
     APIError,
     create_deployment,
     fetch_public_model_info,
-    mock_deploy,
 )
 from src.services.session_client import get_session_token
 import uuid
@@ -19,92 +18,30 @@ def _format_size(size_bytes: int | None) -> str:
     return f"{size_bytes:.1f} PB"
 
 
-def render_deployment_section() -> None:
-    """Render the GCP deployment configuration and mock deployment UI."""
-    st.subheader("Deploy to GCP (Simulated)")
-
-    selected_model = st.session_state.get("selected_model", "")
-    if not selected_model:
-        st.warning("No model selected. Please upload or select a model first.")
-        return
-
-    st.markdown(f"**Model to deploy**: `{selected_model}`")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        cpu_selected = st.button(
-            "🖥️ CPU",
-            key="btn_cpu",
-            use_container_width=True,
-            help="Deploy on CPU infrastructure",
-        )
-    with col2:
-        gpu_selected = st.button(
-            "⚡ GPU",
-            key="btn_gpu",
-            use_container_width=True,
-            help="Deploy on GPU infrastructure",
-        )
-
-    resource_type = None
-    if cpu_selected:
-        resource_type = "CPU"
-    elif gpu_selected:
-        resource_type = "GPU"
-
-    if resource_type:
-        session_token = get_session_token()
-        deploy_key = st.session_state.get("_deploy_request_nonce")
-        if not deploy_key:
-            deploy_key = str(uuid.uuid4())
-            st.session_state["_deploy_request_nonce"] = deploy_key
-        with st.spinner(f"Simulating {resource_type} deployment…"):
-            try:
-                result = mock_deploy(
-                    session_token,
-                    selected_model,
-                    resource_type,
-                    idempotency_key=f"deploy:{deploy_key}",
-                )
-                st.success(f"**{result['status'].upper()}**: {result['message']}")
-                st.balloons()
-                st.session_state["deployment_result"] = result
-                st.session_state.pop("_deploy_request_nonce", None)
-            except APIError as exc:
-                if exc.status_code == 401:
-                    st.session_state["last_auth_error"] = "Session expired. Please sign in again."
-                    st.session_state["pending_action"] = {
-                        "type": "deploy",
-                        "model_repository": selected_model,
-                        "resource_type": resource_type,
-                    }
-                    st.error("Session expired. Please sign in again.")
-                    return
-                st.error(f"Deployment failed: {exc.detail}")
-            except Exception as exc:
-                st.error(f"Unexpected error during deployment: {exc}")
-
-    if "deployment_result" in st.session_state:
-        with st.expander("Last Deployment Result", expanded=False):
-            r = st.session_state["deployment_result"]
-            st.json(r)
-
-
 def render_public_repo_deploy_section() -> None:
-    """Render UI for fetching public repo metadata and triggering mock deployment."""
-    st.subheader("Deploy a Public Repository")
+    """Render UI for real GKE CPU / Lightning AI GPU deployment of any HF model."""
+    st.subheader("🚀 Deploy to Cloud")
 
     session_token = get_session_token()
+
+    shortcut = st.session_state.pop("shortcut_deploy_model", None)
+    if shortcut:
+        st.success(f"Ready to deploy **{shortcut}**.")
+
     repo_id = st.text_input(
-        "Public Repository ID",
+        "Model Repository ID",
+        value=shortcut or "",
         placeholder="owner/repo-name",
-        help="Full Hugging Face repository identifier, e.g. google-bert/bert-base-uncased",
+        help=(
+            "HuggingFace repository identifier, e.g. `Qwen/Qwen3-1.7B` or `your-username/my-model`. "
+            "Works for public, private, and gated repositories — your HuggingFace token is used automatically."
+        ),
         key="public_repo_id_input",
     )
 
     if st.button("Fetch Repository Info", key="btn_fetch_public_repo"):
         if not repo_id or "/" not in repo_id:
-            st.error("Invalid format. Please use owner/repo-name (e.g. google-bert/bert-base-uncased).")
+            st.error("Invalid format. Please use owner/repo-name (e.g. Qwen/Qwen3-1.7B).")
         else:
             with st.spinner("Fetching repository metadata…"):
                 try:
@@ -123,7 +60,10 @@ def render_public_repo_deploy_section() -> None:
                     if exc.status_code == 404:
                         st.error("Repository not found. Check the repository ID and try again.")
                     elif exc.status_code == 403:
-                        st.error("Repository is private. Only public repositories can be deployed this way.")
+                        st.error(
+                            "Access denied for this repository. "
+                            "If it is gated or private, ensure your HuggingFace token has read access."
+                        )
                     elif exc.status_code == 400:
                         st.error("Invalid repository ID format. Use owner/repo-name.")
                     else:
@@ -148,7 +88,7 @@ def render_public_repo_deploy_section() -> None:
             key="public_repo_hardware_selector",
             help=(
                 "**CPU** — deploys on GKE Autopilot via TGI (requires GCP credentials). "
-                "**GPU** — deploys on Lightning AI managed cloud via LitServe + vLLM "
+                "**GPU** — deploys on Lightning AI managed cloud via vLLM "
                 "(requires a Lightning AI API key from the ⚡ Lightning AI tab)."
             ),
         )
@@ -169,8 +109,6 @@ def render_public_repo_deploy_section() -> None:
         if deploy_btn and hardware_type:
             _handle_real_deploy(session_token, info["repo_id"], hardware_type=hardware_type.lower(), force=False)
 
-        # If the previous attempt came back with a duplicate-model warning,
-        # show a confirmation dialog for a second deploy of the same model.
         dup_pending = st.session_state.get("_duplicate_confirm_for")
         if dup_pending == info["repo_id"] and hardware_type:
             st.warning(
@@ -197,7 +135,7 @@ def _handle_real_deploy(session_token: str, hf_model_id: str, *, hardware_type: 
         platform = "GKE (CPU)" if hardware_type == "cpu" else "Lightning AI (GPU)"
         st.success(
             f"Deployment accepted on **{platform}**. Status: **{result['status']}**. "
-            f"Follow its progress in the Deployments tab. ID: `{result['id']}`"
+            f"Follow its progress in the **📊 Deployments** tab. ID: `{result['id']}`"
         )
         st.session_state["last_deployment"] = result
     except APIError as exc:
@@ -219,10 +157,17 @@ def _handle_real_deploy(session_token: str, hf_model_id: str, *, hardware_type: 
                 "Your GCP credentials are missing or invalid. Update them in the "
                 "**☁️ GCP Credentials** tab before CPU deployment."
             )
+        elif exc.status_code == 400 and exc.code == "hf_hub_unreachable":
+            st.error(f"HuggingFace Hub is currently unreachable. Please retry.")
+        elif exc.status_code == 400 and exc.code == "model_access_denied":
+            st.error(
+                "Access denied for this repository. "
+                "Ensure your HuggingFace token has read permission."
+            )
         elif exc.status_code == 400 and exc.code == "unsupported_model":
             st.error(
-                "This model type is not supported for real deployment. "
-                "Only text-generation / NLP models are allowed in this version."
+                "This model type is not supported for deployment. "
+                "Only text-generation / NLP models are supported in this version."
             )
         elif exc.status_code == 400 and exc.code == "model_not_found":
             st.error(f"Model not found on HuggingFace: {exc.detail}")
