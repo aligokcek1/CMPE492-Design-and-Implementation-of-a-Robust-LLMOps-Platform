@@ -112,5 +112,5 @@ Python 3.11: Follow standard conventions. Ruff for linting.
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan:
-`specs/008-gpu-cpu-deploy/plan.md`
+`specs/009-local-model-hf-deploy/plan.md`
 <!-- SPECKIT END -->
