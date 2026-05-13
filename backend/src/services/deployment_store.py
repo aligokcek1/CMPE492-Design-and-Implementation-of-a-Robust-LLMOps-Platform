@@ -44,6 +44,7 @@ class DeploymentStore:
         hf_model_id: str,
         hf_model_display_name: str | None = None,
         hardware_type: str = "cpu",
+        model_origin: str = "public",
         force: bool = False,
     ) -> DeploymentRow:
         session_factory = get_session_factory()
@@ -113,6 +114,7 @@ class DeploymentStore:
                 hf_model_id=hf_model_id,
                 hf_model_display_name=hf_model_display_name or hf_model_id.split("/")[-1],
                 hardware_type=hardware_type,
+                model_origin=model_origin,
                 gcp_project_id=gcp_project_id,
                 gke_cluster_name=gke_cluster_name,
                 gke_region=gke_region,

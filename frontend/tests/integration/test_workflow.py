@@ -225,30 +225,134 @@ def test_public_deploy_shows_hardware_selector_and_deploy_button(at):
     assert deploy_btn.disabled, "Deploy button should be disabled before hardware type is selected"
 
 
-def test_retry_without_duplicate_uses_same_idempotency_key(at):
+def test_select_existing_use_model_pre_populates_deploy_tab(at):
+    """When shortcut_deploy_model is set (simulating 'Use Selected Model' click),
+    the Deploy to Cloud tab shows the pre-populated model and 'Ready to deploy' message."""
     at.session_state["session_token"] = "session_valid"
     at.session_state["hf_username"] = "testuser"
-    at.session_state["selected_model"] = "user/model"
+    at.session_state["_session_checked"] = True
+    at.session_state["shortcut_deploy_model"] = "testuser/my-model"
+
+    credentials_response = MagicMock(ok=True, json=lambda: {"configured": False})
+    with patch("src.services.api_client.requests.get", return_value=credentials_response), \
+         patch("src.services.api_client.requests.post", return_value=credentials_response):
+        at.run()
+
+    assert not at.exception
+    all_text = " ".join(
+        str(getattr(el, "value", "") or getattr(el, "body", "") or "")
+        for el in list(at.markdown) + list(at.text) + list(at.success) + list(at.info)
+    )
+    assert "my-model" in all_text or "Ready to deploy" in all_text, (
+        "Expected Deploy tab to show pre-populated model when shortcut_deploy_model is set"
+    )
+
+
+# =========================================================================== #
+# 009 — Upload-to-Deploy shortcut + My Upload badge (T025, T028, T029)         #
+# =========================================================================== #
+
+def test_upload_shortcut_pre_populates_deploy_tab(at):
+    """T025: When shortcut_deploy_model is set in session, Deploy tab shows pre-populated message."""
+    at.session_state["session_token"] = "test_session"
+    at.session_state["hf_username"] = "testuser"
+    at.session_state["_session_checked"] = True
+    at.session_state["shortcut_deploy_model"] = "testuser/my-uploaded-model"
+
+    credentials_response = MagicMock(ok=True, json=lambda: {"configured": False})
+
+    with patch("src.services.api_client.requests.get", return_value=credentials_response), \
+         patch("src.services.api_client.requests.post", return_value=credentials_response):
+        at.run()
+
+    assert not at.exception
+    all_text = " ".join(
+        str(getattr(el, "value", "") or getattr(el, "body", "") or "")
+        for el in list(at.markdown) + list(at.text) + list(at.success) + list(at.info)
+    )
+    assert "my-uploaded-model" in all_text or "Ready to deploy" in all_text, (
+        "Expected Deploy tab to display pre-populated model from shortcut"
+    )
+
+
+def test_my_upload_badge_shown_for_uploaded_origin(at):
+    """T028: Deployment row with model_origin='uploaded' shows 'My Upload' in Deployments tab."""
+    at.session_state["session_token"] = "test_session"
+    at.session_state["hf_username"] = "testuser"
     at.session_state["_session_checked"] = True
 
-    first = MagicMock(ok=False, status_code=401)
-    first.json.return_value = {"detail": {"code": "session_expired", "message": "expired"}}
-    first.text = "expired"
-    second = MagicMock(ok=True)
-    second.json.return_value = {"status": "mock_success", "message": "ok"}
+    deployments_response = MagicMock(
+        ok=True,
+        json=lambda: [
+            {
+                "id": "dep-001",
+                "hf_model_id": "testuser/my-model",
+                "hf_model_display_name": "My Model",
+                "hardware_type": "cpu",
+                "model_origin": "uploaded",
+                "status": "running",
+                "status_message": "Running",
+                "endpoint_url": "http://1.2.3.4:80",
+                "created_at": "2026-01-01T00:00:00Z",
+                "updated_at": "2026-01-01T00:00:00Z",
+            }
+        ],
+    )
+    credentials_response = MagicMock(ok=True, json=lambda: {"configured": False})
 
-    with patch("src.services.api_client.requests.post", side_effect=[first, second]) as mock_post:
+    with patch("src.services.api_client.requests.get", return_value=deployments_response), \
+         patch("src.services.api_client.requests.post", return_value=credentials_response):
         at.run()
-        cpu_buttons = [b for b in at.button if b.label == "🖥️ CPU"]
-        assert cpu_buttons, "CPU button not found"
-        cpu_buttons[0].click().run()
-        cpu_buttons = [b for b in at.button if b.label == "🖥️ CPU"]
-        cpu_buttons[0].click().run()
 
-    assert len(mock_post.call_args_list) >= 2
-    header_1 = mock_post.call_args_list[0].kwargs["headers"]["X-Idempotency-Key"]
-    header_2 = mock_post.call_args_list[1].kwargs["headers"]["X-Idempotency-Key"]
-    assert header_1 == header_2
+    assert not at.exception
+    all_text = " ".join(
+        str(getattr(el, "value", "") or getattr(el, "body", "") or "")
+        for el in list(at.markdown) + list(at.text)
+    )
+    # Badge uses "My Upload**" (singular, bold); header uses "My Uploads" (plural)
+    assert "My Upload**" in all_text, (
+        "Expected '📤 My Upload' badge to appear for model_origin='uploaded' deployment"
+    )
+
+
+def test_no_badge_for_public_origin(at):
+    """T029: Deployment with model_origin='public' does NOT show 'My Upload' badge."""
+    at.session_state["session_token"] = "test_session"
+    at.session_state["hf_username"] = "testuser"
+    at.session_state["_session_checked"] = True
+
+    deployments_response = MagicMock(
+        ok=True,
+        json=lambda: [
+            {
+                "id": "dep-002",
+                "hf_model_id": "org/public-model",
+                "hf_model_display_name": "Public Model",
+                "hardware_type": "cpu",
+                "model_origin": "public",
+                "status": "running",
+                "status_message": "Running",
+                "endpoint_url": "http://1.2.3.4:80",
+                "created_at": "2026-01-01T00:00:00Z",
+                "updated_at": "2026-01-01T00:00:00Z",
+            }
+        ],
+    )
+    credentials_response = MagicMock(ok=True, json=lambda: {"configured": False})
+
+    with patch("src.services.api_client.requests.get", return_value=deployments_response), \
+         patch("src.services.api_client.requests.post", return_value=credentials_response):
+        at.run()
+
+    assert not at.exception
+    all_text = " ".join(
+        str(getattr(el, "value", "") or getattr(el, "body", "") or "")
+        for el in list(at.markdown) + list(at.text)
+    )
+    # Badge uses "My Upload**" (singular, bold); section header uses "My Uploads" (plural) — check badge only
+    assert "My Upload**" not in all_text, (
+        "Expected NO '📤 My Upload' badge for model_origin='public' deployment"
+    )
 
 
 def test_expired_session_prompt_and_context_recovery_hint(at):

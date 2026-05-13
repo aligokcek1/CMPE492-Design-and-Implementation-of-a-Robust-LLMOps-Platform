@@ -14,7 +14,9 @@ from ..services.session_store import SessionError, session_store
 
 router = APIRouter()
 
-MAX_UPLOAD_BYTES: int = 5 * 1024 * 1024 * 1024  # 5 GB
+# Configurable via LLMOPS_MAX_UPLOAD_BYTES env var (bytes). Defaults to 50 GB.
+# Set to 0 to disable the limit entirely.
+MAX_UPLOAD_BYTES: int = int(os.environ.get("LLMOPS_MAX_UPLOAD_BYTES", 50 * 1024 * 1024 * 1024))
 
 
 def _sanitise_filename(raw: str) -> str:
@@ -69,10 +71,14 @@ async def start_upload(
             safe_rel = "unnamed_file"
         content = await upload_file.read()
         total_size += len(content)
-        if total_size > MAX_UPLOAD_BYTES:
+        if MAX_UPLOAD_BYTES > 0 and total_size > MAX_UPLOAD_BYTES:
             raise HTTPException(
                 status_code=413,
-                detail="Total upload size exceeds the platform limit",
+                detail=(
+                    f"Total upload size exceeds the configured limit "
+                    f"({MAX_UPLOAD_BYTES / (1024 ** 3):.0f} GB). "
+                    "Set LLMOPS_MAX_UPLOAD_BYTES=0 to disable this check."
+                ),
             )
         file_contents.append((safe_rel, content))
 
@@ -104,7 +110,11 @@ async def start_upload(
     if not isinstance(folder_results, list):
         folder_results = []
 
-    response = UploadStartResponse(session_id=session_id, folder_results=folder_results)
+    response = UploadStartResponse(
+        session_id=session_id,
+        folder_results=folder_results,
+        deploy_shortcut=repository_id,
+    )
     session_store.store_idempotency_result(
         username=session.username,
         operation_type="upload",

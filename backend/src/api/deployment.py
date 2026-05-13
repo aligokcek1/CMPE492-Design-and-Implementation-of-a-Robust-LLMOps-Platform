@@ -83,6 +83,7 @@ def _to_deployment_response(row) -> Deployment:
         hf_model_id=row.hf_model_id,
         hf_model_display_name=row.hf_model_display_name,
         hardware_type=row.hardware_type,
+        model_origin=getattr(row, "model_origin", "public"),
         status=GkeDeploymentStatus(row.status),
         status_message=row.status_message,
         endpoint_url=row.endpoint_url,
@@ -175,7 +176,8 @@ async def create_deployment(
 
     try:
         is_supported, pipeline_tag, reason = await hf_models.is_supported_text_generation_model(
-            payload.hf_model_id
+            payload.hf_model_id,
+            hf_token=session.hf_token,
         )
     except RepositoryNotFoundError as exc:
         raise HTTPException(
@@ -186,15 +188,44 @@ async def create_deployment(
             },
         ) from exc
 
+    # Determine ownership before evaluating the gate result so we can apply the
+    # correct bypass logic for user-uploaded models.
+    model_origin = (
+        "uploaded"
+        if payload.hf_model_id.split("/")[0] == session.username
+        else "public"
+    )
+
     if not is_supported:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "code": "unsupported_model",
-                "message": reason,
-                "pipeline_tag": pipeline_tag,
-            },
-        )
+        if pipeline_tag == "unreachable":
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "hf_hub_unreachable",
+                    "message": reason,
+                },
+            )
+        if pipeline_tag == "access_denied":
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "model_access_denied",
+                    "message": reason,
+                },
+            )
+        # For user-uploaded models with no pipeline_tag metadata, skip the
+        # pipeline check — the user knows what they uploaded.
+        if model_origin == "uploaded" and pipeline_tag in ("unknown", "private"):
+            is_supported = True
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "unsupported_model",
+                    "message": reason,
+                    "pipeline_tag": pipeline_tag,
+                },
+            )
 
     display_name = await hf_models.get_display_name(payload.hf_model_id)
 
@@ -204,6 +235,7 @@ async def create_deployment(
             hf_model_id=payload.hf_model_id,
             hf_model_display_name=display_name,
             hardware_type=payload.hardware_type,
+            model_origin=model_origin,
             force=payload.force,
         )
     except DeploymentError as exc:

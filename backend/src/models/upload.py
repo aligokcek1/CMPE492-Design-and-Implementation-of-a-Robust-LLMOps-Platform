@@ -49,6 +49,7 @@ class FolderUploadResult(BaseModel):
 class UploadStartResponse(BaseModel):
     session_id: str
     folder_results: list[FolderUploadResult] = []
+    deploy_shortcut: str | None = None
 
 
 class PublicModelInfoResponse(BaseModel):

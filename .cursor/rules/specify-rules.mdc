@@ -6,13 +6,16 @@ alwaysApply: true
 
 # CMPE492-Design-and-Implementation-of-a-Robust-LLMOps-Platform Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-05-10
+Auto-generated from all feature plans. Last updated: 2026-05-13
 
 ## Active Technologies
 - Python 3.11 (backend + frontend) + FastAPI 0.135, Pydantic 2.12, huggingface_hub 1.7, Streamlit 1.55, pytest, pytest-asyncio, httpx (006-session-persistence)
 - In-memory backend session registry (process-local) + browser cookie-persisted session token for Streamlit client continuity; no database (006-session-persistence)
 - SQLite file at `backend/data/llmops.db` (3 tables: `gcp_credentials`, `deployments`, `lightning_ai_credentials`). Credentials encrypted with Fernet; key read from `LLMOPS_ENCRYPTION_KEY` env var. (007-gke-inference-pipeline, 008-gpu-cpu-deploy)
 - `lightning-sdk` (Lightning AI Python SDK) for GPU deployment submission, status polling, and teardown via Lightning AI managed cloud. `litserve` for LitServe+vLLM server script generation. (008-gpu-cpu-deploy)
+- `HF_TOKEN` injected as a transient env var into every deployment environment (GKE pod + Lightning AI job) at launch time — never persisted in DB, logs, or API responses. (009-local-model-hf-deploy)
+- `model_origin` field on `DeploymentRow` (`"uploaded"` | `"public"`) determined at deploy time by comparing the `hf_model_id` owner segment to the authenticated HF username. (009-local-model-hf-deploy)
+- Upload size: 10 GB per file (Streamlit `maxUploadSize` in `frontend/.streamlit/config.toml`); backend total limit configurable via `LLMOPS_MAX_UPLOAD_BYTES` env var, defaulting to 50 GB (set to 0 to disable). (009-local-model-hf-deploy)
 
 ## Project Structure
 
@@ -23,30 +26,36 @@ backend/
 │   ├── api/
 │   │   ├── auth.py                          # POST /api/auth/verify, GET /api/auth/session, POST /api/auth/logout
 │   │   ├── auth_helpers.py                  # Shared session auth dependency
-│   │   ├── deployment.py                    # Mock deploy + real GKE/Lightning AI deploy/list/get/delete/inference
+│   │   ├── deployment.py                    # Real GKE/Lightning AI deploy/list/get/delete/inference;
+│   │   │                                    # determines model_origin; maps hf_hub_unreachable + model_access_denied errors;
+│   │   │                                    # bypasses pipeline_tag check for user-owned models with no tag
 │   │   ├── errors.py                        # Global error handler
 │   │   ├── gcp_credentials.py               # GET/POST/DELETE /api/gcp/credentials
 │   │   ├── lightning_ai_credentials.py      # GET/POST/DELETE /api/lightning/credentials (008)
 │   │   ├── models.py                        # GET /api/models, GET /api/models/public
-│   │   └── upload.py                        # POST /api/upload/start
+│   │   └── upload.py                        # POST /api/upload/start; returns deploy_shortcut in response
 │   ├── models/
 │   │   ├── auth.py
-│   │   ├── deployment.py                    # DeployRequest(hardware_type), Deployment, DeploymentDetail
+│   │   ├── deployment.py                    # DeployRequest(hardware_type), Deployment(model_origin), DeploymentDetail
 │   │   ├── gcp_credentials.py
 │   │   ├── lightning_ai_credentials.py      # LightningAICredentialRequest/Status (008)
-│   │   └── upload.py
+│   │   └── upload.py                        # UploadStartResponse includes deploy_shortcut: str | None
 │   ├── db/
-│   │   ├── models.py                        # GCPCredentialsRow, LightningAICredentialsRow (008), DeploymentRow
+│   │   ├── models.py                        # GCPCredentialsRow, LightningAICredentialsRow, DeploymentRow(model_origin)
 │   │   └── migrations.py                    # ensure_schema() — structural + additive migrations
 │   └── services/
 │       ├── credentials_store.py             # GCP credential CRUD + Fernet encrypt/decrypt
 │       ├── lightning_ai_credentials_store.py # Lightning AI key CRUD (008)
-│       ├── lightning_ai_provider.py         # LightningAIProvider protocol + real SDK impl (008)
-│       ├── lightning_ai_fake_provider.py    # FakeLightningAIProvider for tests (008)
+│       ├── lightning_ai_provider.py         # LightningAIProvider protocol + real SDK impl;
+│       │                                    # deploy() accepts hf_token param; passes env={"HF_TOKEN":...} to dep.start()
+│       ├── lightning_ai_fake_provider.py    # FakeLightningAIProvider for tests; deploy() accepts hf_token param
 │       ├── litserve_gpu.py                  # generate(hf_model_id) → LitServe+vLLM script string (008)
-│       ├── deployment_store.py              # DeploymentStore — hardware_type-aware CRUD
-│       ├── deployment_orchestrator.py       # GKE (CPU) + Lightning AI (GPU) orchestration
-│       ├── vllm_manifest.py                 # TGI-CPU K8s manifest generator (legacy name retained)
+│       ├── deployment_store.py              # DeploymentStore — hardware_type + model_origin-aware CRUD
+│       ├── deployment_orchestrator.py       # GKE (CPU) + Lightning AI (GPU) orchestration;
+│       │                                    # _hf_token_for_user() fetches session token; passes to both paths
+│       ├── vllm_manifest.py                 # TGI-CPU K8s manifest generator; injects HF_TOKEN + HUGGING_FACE_HUB_TOKEN
+│       ├── hf_models.py                     # is_supported_text_generation_model(id, *, hf_token, timeout=10);
+│       │                                    # authenticated HfApi; maps timeout → "unreachable"; maps 403 → "access_denied"
 │       ├── huggingface.py
 │       ├── inference_proxy.py
 │       ├── kube_client.py
@@ -57,27 +66,35 @@ backend/
 └── tests/contract/
     ├── conftest.py                          # FakeGCPProvider + FakeLightningAIProvider fixtures
     ├── test_auth_api.py
-    ├── test_deployment_api.py               # CPU + GPU deploy/delete/inference tests
+    ├── test_deployment_api.py               # CPU + GPU deploy/delete/inference + model_origin + HF_TOKEN security tests
     ├── test_lightning_ai_credentials_api.py # Lightning AI credential CRUD tests (008)
     ├── test_models_api.py
-    └── test_upload_api.py
+    └── test_upload_api.py                   # Includes deploy_shortcut response field tests
 
 frontend/
+├── .streamlit/
+│   └── config.toml                          # maxUploadSize = 10000 (10 GB per file)
 ├── conftest.py
 ├── src/
-│   ├── app.py                               # 6 tabs: Upload, Select, Deploy, Deployments, GCP Credentials, ⚡ Lightning AI
+│   ├── app.py                               # 6 tabs: Upload, Select, Deploy to Cloud, Deployments, GCP Credentials, ⚡ Lightning AI
+│   │                                        # Legacy mock-deploy section removed; single "🚀 Deploy to Cloud" section
 │   ├── components/
 │   │   ├── auth.py
-│   │   ├── deploy.py                        # Hardware selector (CPU/GPU radio) + GPU error handling
+│   │   ├── deploy.py                        # render_public_repo_deploy_section() only (mock deploy removed);
+│   │   │                                    # reads shortcut_deploy_model from session_state to pre-populate repo ID;
+│   │   │                                    # handles hf_hub_unreachable + model_access_denied error codes;
+│   │   │                                    # field renamed "Model Repository ID" (supports private + gated repos)
 │   │   ├── gcp_credentials.py
 │   │   ├── lightning_ai_credentials.py      # ⚡ Lightning AI tab component (008)
-│   │   ├── deployments_list.py
-│   │   └── upload.py
+│   │   ├── deployments_list.py              # Shows "📤 My Upload" badge for model_origin="uploaded" rows
+│   │   └── upload.py                        # Sets shortcut_deploy_model in session_state after upload;
+│   │                                        # "Use Selected Model" also sets shortcut_deploy_model;
+│   │                                        # "My Uploads" section header; no frontend size check
 │   └── services/
 │       ├── api_client.py                    # All API calls including Lightning AI credential endpoints
 │       └── session_client.py
 └── tests/integration/
-    └── test_workflow.py                     # Includes hardware selector + GPU deploy scenarios (008)
+    └── test_workflow.py                     # Includes hardware selector, GPU deploy, shortcut, badge scenarios
 ```
 
 ## Commands
@@ -90,6 +107,9 @@ cd frontend && ruff check .     # Lint frontend
 cd backend && uvicorn src.main:app --reload   # Run backend dev server
 cd frontend && streamlit run src/app.py       # Run frontend dev server
 
+# Override upload size limit (bytes); 0 = unlimited
+LLMOPS_MAX_UPLOAD_BYTES=0 uvicorn src.main:app --reload
+
 # Opt-in manifest validation against a real Kubernetes API server using server-side dry-run.
 # Requires a scratch kubeconfig; NEVER creates real resources (dry_run=["All"]).
 LLMOPS_K8S_DRYRUN_KUBECONFIG=~/.kube/scratch-config \
@@ -100,7 +120,17 @@ LLMOPS_K8S_DRYRUN_KUBECONFIG=~/.kube/scratch-config \
 
 Python 3.11: Follow standard conventions. Ruff for linting.
 
+## Key Design Decisions & Constraints
+
+- **HF_TOKEN injection**: Every deployment (CPU + GPU, public + private + gated) receives the session's `HF_TOKEN` as a transient env var. GKE path: K8s Secret via `vllm_manifest.generate()`. Lightning AI path: `dep.start(env={"HF_TOKEN": ...})`. Token MUST NOT appear in DB columns, API responses, or log lines (SC-005).
+- **model_origin**: Determined once at `create_deployment` time by `hf_model_id.split("/")[0] == session.username`. Values: `"uploaded"` or `"public"`. Stored in `deployments.model_origin` (additive migration, default `"public"`). Never updated after creation.
+- **Pipeline-tag bypass**: `is_supported_text_generation_model()` checks the HF Hub `pipeline_tag`. If the tag is `"unknown"` (model uploaded without metadata) AND `model_origin == "uploaded"`, the check is bypassed — the user owns the model and knows what they deployed. Third-party models with unknown tags are still rejected.
+- **Pre-deploy check timeout**: 10 seconds. Timeout maps to `hf_hub_unreachable` error code with message "HuggingFace Hub is currently unreachable, please retry." — frontend displays this verbatim.
+- **deploy_shortcut flow**: `POST /api/upload/start` response includes `deploy_shortcut: str | None` (= `repository_id`). Frontend sets `st.session_state["shortcut_deploy_model"]` on success. "Use Selected Model" in Select tab also sets this key. The Deploy to Cloud tab pops this key on render and pre-populates the repo ID input.
+- **No mock-deploy UI**: The legacy `render_deployment_section()` and `mock_deploy` client call are removed from the frontend. The Deploy to Cloud tab contains only the real GKE + Lightning AI path.
+
 ## Recent Changes
+- 009-local-model-hf-deploy: Cloud deployment of user-uploaded HF models. Universal HF_TOKEN injection (CPU + GPU). `model_origin` field on deployments. Upload-to-deploy shortcut. "My Upload" badge in Deployments list. Pipeline-tag bypass for user-owned models. Pre-deploy timeout/auth error codes. Upload size raised (10 GB/file Streamlit, 50 GB backend default). Legacy mock-deploy section removed; "Model Repository ID" field (private + gated supported). "Use Selected Model" pre-populates Deploy tab.
 - 008-gpu-cpu-deploy: Added GPU/CPU hardware selector for public model deployment. GPU path uses Lightning AI managed cloud (LitServe+vLLM); CPU path unchanged (GKE Autopilot + TGI-CPU). New ⚡ Lightning AI credentials tab. `deployments` table extended with `hardware_type` and `lightning_ai_deployment_id`; GKE columns made nullable.
 - 007-gke-inference-pipeline: Added real GKE Autopilot deployment pipeline, GCP credential management, deployment orchestrator, status polling loop, and inference proxy.
 - 006-session-persistence: Added backend-managed platform sessions, restore/logout endpoints, and idempotent upload/deploy retries.

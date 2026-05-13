@@ -245,10 +245,12 @@ class DeploymentOrchestrator:
             return
 
         try:
+            hf_token = _hf_token_for_user(row.user_id)
             lightning_ai_deployment_id, endpoint_url = await provider.deploy(
                 hf_model_id=row.hf_model_id,
                 api_key=creds.api_key,
                 lightning_user_id=creds.lightning_user_id,
+                hf_token=hf_token,
             )
 
             deployment_store.store_lightning_deployment_id(

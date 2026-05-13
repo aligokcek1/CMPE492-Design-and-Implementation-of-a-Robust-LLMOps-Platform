@@ -136,7 +136,12 @@ async def _ensure_credentials(client: AsyncClient, headers: dict[str, str]) -> N
 def supported_hf_model(monkeypatch):
     """Stub out the HF metadata gate so tests never hit huggingface.co."""
 
-    async def _is_supported(model_id: str) -> tuple[bool, str, str]:
+    async def _is_supported(
+        model_id: str,
+        *,
+        hf_token: str | None = None,
+        timeout: int = 10,
+    ) -> tuple[bool, str, str]:
         if "unsupported" in model_id.lower():
             return False, "image-classification", "model pipeline is image-classification, not text generation"
         return True, "text-generation", "ok"
@@ -895,6 +900,380 @@ async def test_gpu_inference_proxy_uses_endpoint_url(transport):
                 json={"messages": [{"role": "user", "content": "hi"}]},
             )
     assert resp.status_code == 200
+
+
+# =========================================================================== #
+# 009 — model_origin, HF_TOKEN injection, new error codes (T007–T011, T034–T038) #
+# =========================================================================== #
+
+@pytest.fixture
+def supported_hf_model_authenticated(monkeypatch):
+    """Like supported_hf_model but accepts the new hf_token and timeout params."""
+
+    async def _is_supported(
+        model_id: str,
+        *,
+        hf_token: str | None = None,
+        timeout: int = 10,
+    ) -> tuple[bool, str, str]:
+        if "unsupported" in model_id.lower():
+            return False, "image-classification", "unsupported pipeline"
+        if "unreachable" in model_id.lower():
+            return False, "unreachable", "HuggingFace Hub is currently unreachable, please retry."
+        if "denied" in model_id.lower():
+            return False, "access_denied", "Token lacks read access to this repository."
+        return True, "text-generation", "ok"
+
+    from src.services import hf_models
+
+    monkeypatch.setattr(hf_models, "is_supported_text_generation_model", _is_supported)
+    return _is_supported
+
+
+async def _ensure_lightning_credentials(client: AsyncClient, headers: dict[str, str]) -> None:
+    resp = await client.post(
+        "/api/lightning/credentials",
+        headers=headers,
+        json={"lightning_user_id": "fake-lai-uid-009", "api_key": "lai-key-009"},
+    )
+    assert resp.status_code == 200, resp.text
+
+
+# T007 — user-owned model sets model_origin = "uploaded"
+@pytest.mark.asyncio
+async def test_deploy_user_owned_model_sets_model_origin_uploaded(
+    transport, supported_hf_model_authenticated
+):
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await _session_auth_headers(client)
+        await _ensure_credentials(client, headers)
+
+        resp = await client.post(
+            "/api/deployments",
+            headers=headers,
+            json={"hf_model_id": "test_user/private-model", "hardware_type": "cpu"},
+        )
+
+    assert resp.status_code == 202, resp.text
+    assert resp.json()["model_origin"] == "uploaded"
+
+
+# T008 — third-party model sets model_origin = "public"
+@pytest.mark.asyncio
+async def test_deploy_third_party_model_sets_model_origin_public(
+    transport, supported_hf_model_authenticated
+):
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await _session_auth_headers(client)
+        await _ensure_credentials(client, headers)
+
+        resp = await client.post(
+            "/api/deployments",
+            headers=headers,
+            json={"hf_model_id": "org/some-model", "hardware_type": "cpu"},
+        )
+
+    assert resp.status_code == 202, resp.text
+    assert resp.json()["model_origin"] == "public"
+
+
+# T009 — HF Hub unreachable returns 400 hf_hub_unreachable
+@pytest.mark.asyncio
+async def test_deploy_hf_hub_unreachable_returns_400(
+    transport, supported_hf_model_authenticated
+):
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await _session_auth_headers(client)
+        await _ensure_credentials(client, headers)
+
+        resp = await client.post(
+            "/api/deployments",
+            headers=headers,
+            json={"hf_model_id": "org/unreachable-model", "hardware_type": "cpu"},
+        )
+
+    assert resp.status_code == 400
+    detail = resp.json()["detail"]
+    assert detail["code"] == "hf_hub_unreachable"
+    assert "unreachable" in detail["message"].lower()
+    assert "retry" in detail["message"].lower()
+
+
+# T010 — token lacks access returns 400 model_access_denied
+@pytest.mark.asyncio
+async def test_deploy_model_access_denied_returns_400(
+    transport, supported_hf_model_authenticated
+):
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await _session_auth_headers(client)
+        await _ensure_credentials(client, headers)
+
+        resp = await client.post(
+            "/api/deployments",
+            headers=headers,
+            json={"hf_model_id": "org/access-denied-model", "hardware_type": "cpu"},
+        )
+
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "model_access_denied"
+
+
+# T011 — GET /api/deployments list items include model_origin
+@pytest.mark.asyncio
+async def test_list_deployments_each_item_has_model_origin(transport):
+    from datetime import UTC, datetime
+
+    from src.db import get_session_factory
+    from src.db.models import DeploymentRow
+
+    dep_id = str(uuid.uuid4())
+    session_factory = get_session_factory()
+    with session_factory() as db:
+        db.add(DeploymentRow(
+            id=dep_id,
+            user_id="test_user",
+            hf_model_id="test_user/my-model",
+            hf_model_display_name="My Model",
+            hardware_type="cpu",
+            model_origin="uploaded",
+            gcp_project_id=f"llmops-{dep_id.replace('-', '')[:8]}-{dep_id.replace('-', '')[8:14]}",
+            gke_cluster_name="llmops-cluster",
+            gke_region="us-central1",
+            status="running",
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        ))
+        db.commit()
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await _session_auth_headers(client)
+        resp = await client.get("/api/deployments", headers=headers)
+
+    assert resp.status_code == 200
+    items = resp.json()
+    assert all("model_origin" in item for item in items)
+    uploaded = next((i for i in items if i["id"] == dep_id), None)
+    assert uploaded is not None
+    assert uploaded["model_origin"] == "uploaded"
+
+
+# T009b — user-uploaded model with no pipeline_tag bypasses the unsupported check
+@pytest.mark.asyncio
+async def test_deploy_user_owned_model_with_unknown_pipeline_tag_allowed(transport):
+    """If a user-uploaded model has pipeline_tag=unknown, deployment is allowed (bypass)."""
+    from unittest.mock import patch as _patch
+    from src.services import hf_models as _hf
+
+    async def _unknown_gate(model_id, *, hf_token=None, timeout=10):
+        return False, "unknown", f"Model pipeline tag is 'unknown'"
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await _session_auth_headers(client)
+        await _ensure_credentials(client, headers)
+
+        with _patch.object(_hf, "is_supported_text_generation_model", _unknown_gate), \
+             _patch.object(_hf, "get_display_name", return_value="My Model"):
+            resp = await client.post(
+                "/api/deployments",
+                headers=headers,
+                json={"hf_model_id": "test_user/no-tag-model", "hardware_type": "cpu"},
+            )
+
+    assert resp.status_code == 202, resp.text
+    assert resp.json()["model_origin"] == "uploaded"
+
+
+@pytest.mark.asyncio
+async def test_deploy_third_party_model_with_unknown_pipeline_tag_rejected(transport):
+    """A third-party model with pipeline_tag=unknown is still rejected (bypass only for owned)."""
+    from unittest.mock import patch as _patch
+    from src.services import hf_models as _hf
+
+    async def _unknown_gate(model_id, *, hf_token=None, timeout=10):
+        return False, "unknown", "Model pipeline tag is 'unknown'"
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await _session_auth_headers(client)
+        await _ensure_credentials(client, headers)
+
+        with _patch.object(_hf, "is_supported_text_generation_model", _unknown_gate):
+            resp = await client.post(
+                "/api/deployments",
+                headers=headers,
+                json={"hf_model_id": "some-org/their-model", "hardware_type": "cpu"},
+            )
+
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "unsupported_model"
+
+
+# T034 — GET /api/deployments/{id} includes model_origin
+@pytest.mark.asyncio
+async def test_get_deployment_by_id_includes_model_origin(
+    transport, supported_hf_model_authenticated
+):
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await _session_auth_headers(client)
+        await _ensure_credentials(client, headers)
+
+        create_resp = await client.post(
+            "/api/deployments",
+            headers=headers,
+            json={"hf_model_id": "test_user/my-private", "hardware_type": "cpu"},
+        )
+        assert create_resp.status_code == 202
+        dep_id = create_resp.json()["id"]
+
+        detail_resp = await client.get(f"/api/deployments/{dep_id}", headers=headers)
+
+    assert detail_resp.status_code == 200
+    body = detail_resp.json()
+    assert "model_origin" in body
+    assert body["model_origin"] == "uploaded"
+
+
+# T035 — HF token must not appear in deployment API response (SC-005 / Constitution II)
+@pytest.mark.asyncio
+async def test_deployment_response_does_not_contain_hf_token(
+    transport, supported_hf_model_authenticated
+):
+    """The session token 'hf_valid_token' must never appear in any response field."""
+    hf_token_value = "hf_valid_token"
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await _session_auth_headers(client)
+        await _ensure_credentials(client, headers)
+
+        resp = await client.post(
+            "/api/deployments",
+            headers=headers,
+            json={"hf_model_id": "test_user/private-model", "hardware_type": "cpu"},
+        )
+
+    assert resp.status_code == 202
+    response_text = resp.text
+    assert hf_token_value not in response_text, (
+        f"HF token '{hf_token_value}' must not appear in deployment response body"
+    )
+
+    from sqlalchemy import inspect as sa_inspect
+    from src.db import get_engine
+
+    inspector = sa_inspect(get_engine())
+    col_names = {col["name"] for col in inspector.get_columns("deployments")}
+    assert "hf_token" not in col_names, "DeploymentRow must not have an hf_token column"
+
+
+# T036 — GPU deploy for public model still passes hf_token to provider (FR-002 universal injection)
+@pytest.mark.asyncio
+async def test_gpu_deploy_public_model_injects_hf_token_to_provider(
+    transport, supported_hf_model_authenticated, fake_lightning_ai_provider
+):
+    """Even for model_origin='public' GPU deploys, hf_token must reach the provider."""
+    received_tokens: list[str] = []
+
+    original_deploy = fake_lightning_ai_provider.deploy
+
+    async def _spy_deploy(*, hf_model_id: str, api_key: str, lightning_user_id: str = "", hf_token: str = "") -> tuple[str, str | None]:
+        received_tokens.append(hf_token)
+        return await original_deploy(
+            hf_model_id=hf_model_id,
+            api_key=api_key,
+            lightning_user_id=lightning_user_id,
+            hf_token=hf_token,
+        )
+
+    fake_lightning_ai_provider.deploy = _spy_deploy
+
+    import asyncio as _asyncio
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await _session_auth_headers(client)
+        await _ensure_lightning_credentials(client, headers)
+
+        resp = await client.post(
+            "/api/deployments",
+            headers=headers,
+            json={"hf_model_id": "org/public-model", "hardware_type": "gpu"},
+        )
+
+    assert resp.status_code == 202, resp.text
+    assert resp.json()["model_origin"] == "public"
+
+    await _asyncio.sleep(0.1)
+
+    assert len(received_tokens) == 1, "provider.deploy() should have been called once"
+    assert received_tokens[0] != "", "hf_token must be non-empty for GPU deploy"
+
+
+# T037 — pre-deploy check timeout surfaces correct error code (SC-006)
+@pytest.mark.asyncio
+async def test_deploy_hf_hub_slow_times_out_with_hf_hub_unreachable(transport):
+    """When is_supported_text_generation_model returns 'unreachable', API returns 400 hf_hub_unreachable."""
+    import asyncio
+
+    async def _slow_gate(model_id: str, *, hf_token: str | None = None, timeout: int = 10) -> tuple[bool, str, str]:
+        await asyncio.sleep(0)  # yield; real impl uses HfApi(timeout=timeout)
+        return False, "unreachable", "HuggingFace Hub is currently unreachable, please retry."
+
+    from src.services import hf_models
+    from unittest.mock import patch as _patch
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await _session_auth_headers(client)
+        await _ensure_credentials(client, headers)
+
+        with _patch.object(hf_models, "is_supported_text_generation_model", _slow_gate):
+            resp = await client.post(
+                "/api/deployments",
+                headers=headers,
+                json={"hf_model_id": "org/any-model", "hardware_type": "cpu"},
+            )
+
+    assert resp.status_code == 400
+    detail = resp.json()["detail"]
+    assert detail["code"] == "hf_hub_unreachable"
+    assert detail["message"] == "HuggingFace Hub is currently unreachable, please retry."
+
+
+# T038 — runtime token-revoked error during deploy produces human-readable status_message (FR-007)
+@pytest.mark.asyncio
+async def test_deployment_status_message_human_readable_on_token_revoked(
+    transport, supported_hf_model_authenticated, fake_lightning_ai_provider
+):
+    """When Lightning AI auth fails during deploy (token revoked), status_message must be human-readable."""
+    from src.services.lightning_ai_provider import LightningAIAuthError
+
+    fake_lightning_ai_provider.deploy_raises = LightningAIAuthError
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await _session_auth_headers(client)
+        await _ensure_lightning_credentials(client, headers)
+
+        resp = await client.post(
+            "/api/deployments",
+            headers=headers,
+            json={"hf_model_id": "test_user/private-model", "hardware_type": "gpu"},
+        )
+
+    assert resp.status_code == 202
+
+    import asyncio
+    await asyncio.sleep(0.1)
+
+    from src.services.deployment_store import deployment_store
+
+    dep_id = resp.json()["id"]
+    row = deployment_store.get(dep_id)
+    assert row is not None
+    assert row.status == "failed"
+    assert row.status_message is not None
+    raw_message = row.status_message.lower()
+    assert "401" not in raw_message or any(
+        phrase in raw_message
+        for phrase in ("api key", "lightning ai", "check", "invalid", "rejected")
+    ), f"status_message should be human-readable, got: {row.status_message!r}"
+    assert len(row.status_message) > 0
 
 
 @pytest.mark.asyncio

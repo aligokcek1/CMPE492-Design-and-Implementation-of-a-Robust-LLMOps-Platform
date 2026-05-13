@@ -38,7 +38,7 @@ class FakeLightningAIProvider:
             raise LightningAIAuthError("Fake: API key rejected.")
 
     async def deploy(
-        self, *, hf_model_id: str, api_key: str, lightning_user_id: str = ""
+        self, *, hf_model_id: str, api_key: str, lightning_user_id: str = "", hf_token: str = ""
     ) -> tuple[str, str | None]:
         if self.reject_key:
             raise LightningAIAuthError("Fake: API key rejected during deploy.")
