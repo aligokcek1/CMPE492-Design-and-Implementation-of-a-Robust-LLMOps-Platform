@@ -6,7 +6,7 @@ alwaysApply: true
 
 # CMPE492-Design-and-Implementation-of-a-Robust-LLMOps-Platform Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-05-13
+Auto-generated from all feature plans. Last updated: 2026-05-24
 
 ## Active Technologies
 - Python 3.11 (backend + frontend) + FastAPI 0.135, Pydantic 2.12, huggingface_hub 1.7, Streamlit 1.55, pytest, pytest-asyncio, httpx (006-session-persistence)
@@ -16,6 +16,7 @@ Auto-generated from all feature plans. Last updated: 2026-05-13
 - `HF_TOKEN` injected as a transient env var into every deployment environment (GKE pod + Lightning AI job) at launch time — never persisted in DB, logs, or API responses. (009-local-model-hf-deploy)
 - `model_origin` field on `DeploymentRow` (`"uploaded"` | `"public"`) determined at deploy time by comparing the `hf_model_id` owner segment to the authenticated HF username. (009-local-model-hf-deploy)
 - Upload size: 10 GB per file (Streamlit `maxUploadSize` in `frontend/.streamlit/config.toml`); backend total limit configurable via `LLMOPS_MAX_UPLOAD_BYTES` env var, defaulting to 50 GB (set to 0 to disable). (009-local-model-hf-deploy)
+- SQLite at `backend/data/llmops.db` — new `deployment_monitoring` table tracks scrape job name, Grafana datasource UID, dashboard UID, provision status, and decommission schedule. Time-series data lives in Prometheus (not SQLite). (010-prometheus-grafana-monitoring)
 
 ## Project Structure
 
@@ -130,11 +131,9 @@ Python 3.11: Follow standard conventions. Ruff for linting.
 - **No mock-deploy UI**: The legacy `render_deployment_section()` and `mock_deploy` client call are removed from the frontend. The Deploy to Cloud tab contains only the real GKE + Lightning AI path.
 
 ## Recent Changes
+- 010-prometheus-grafana-monitoring: Added Python 3.11 (backend + frontend)
 - 009-local-model-hf-deploy: Cloud deployment of user-uploaded HF models. Universal HF_TOKEN injection (CPU + GPU). `model_origin` field on deployments. Upload-to-deploy shortcut. "My Upload" badge in Deployments list. Pipeline-tag bypass for user-owned models. Pre-deploy timeout/auth error codes. Upload size raised (10 GB/file Streamlit, 50 GB backend default). Legacy mock-deploy section removed; "Model Repository ID" field (private + gated supported). "Use Selected Model" pre-populates Deploy tab.
 - 008-gpu-cpu-deploy: Added GPU/CPU hardware selector for public model deployment. GPU path uses Lightning AI managed cloud (LitServe+vLLM); CPU path unchanged (GKE Autopilot + TGI-CPU). New ⚡ Lightning AI credentials tab. `deployments` table extended with `hardware_type` and `lightning_ai_deployment_id`; GKE columns made nullable.
-- 007-gke-inference-pipeline: Added real GKE Autopilot deployment pipeline, GCP credential management, deployment orchestrator, status polling loop, and inference proxy.
-- 006-session-persistence: Added backend-managed platform sessions, restore/logout endpoints, and idempotent upload/deploy retries.
-- 005-folder-upload-repo-deploy: Added directory upload, per-folder error isolation, public repo metadata fetch, and public repo mock deployment.
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->
@@ -142,5 +141,5 @@ Python 3.11: Follow standard conventions. Ruff for linting.
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan:
-`specs/009-local-model-hf-deploy/plan.md`
+`specs/010-prometheus-grafana-monitoring/plan.md`
 <!-- SPECKIT END -->
