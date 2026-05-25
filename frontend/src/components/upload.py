@@ -2,7 +2,8 @@ import posixpath
 import uuid
 
 import streamlit as st
-from src.services.api_client import start_upload, list_models, APIError
+
+from src.services.api_client import APIError, list_models, start_upload
 from src.services.session_client import get_session_token
 
 

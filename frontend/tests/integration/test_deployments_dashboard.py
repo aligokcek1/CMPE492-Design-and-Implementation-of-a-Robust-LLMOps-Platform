@@ -8,7 +8,6 @@ from streamlit.testing.v1 import AppTest
 
 from tests.helpers.api_mocks import make_get_side_effect, mock_json_response
 
-
 APP_MODULE = "src/app.py"
 
 

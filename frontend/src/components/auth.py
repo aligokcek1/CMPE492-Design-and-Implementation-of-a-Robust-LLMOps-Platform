@@ -1,5 +1,6 @@
 import streamlit as st
-from src.services.api_client import verify_token, APIError
+
+from src.services.api_client import APIError, verify_token
 from src.services.session_client import set_session
 
 

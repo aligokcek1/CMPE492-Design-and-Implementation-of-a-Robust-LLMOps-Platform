@@ -2,12 +2,12 @@
 
 Covers: Login -> Upload -> Select Model -> Deploy (all mocked at API boundary).
 """
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from streamlit.testing.v1 import AppTest
 
 from tests.helpers.api_mocks import make_get_side_effect, mock_json_response
-
 
 APP_MODULE = "src/app.py"
 

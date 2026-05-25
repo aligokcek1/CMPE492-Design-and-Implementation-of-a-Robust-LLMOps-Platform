@@ -2,8 +2,8 @@
 # Copyright (c) 2026, Ali GÖKÇEK
 """LLMOps Platform Streamlit application entry point."""
 
-import sys
 import os
+import sys
 
 # Ensure the frontend/ directory is on sys.path so `src.*` imports resolve
 # regardless of whether the script is launched via `streamlit run src/app.py`
@@ -15,10 +15,10 @@ if _frontend_dir not in sys.path:
 import streamlit as st  # noqa: E402
 
 from src.components.auth import render_login  # noqa: E402
-from src.components.upload import render_upload_section, render_model_selector  # noqa: E402
 from src.components.deploy import render_public_repo_deploy_section  # noqa: E402
 from src.components.deployments_list import render_deployments_list  # noqa: E402
 from src.components.sidebar import render_sidebar  # noqa: E402
+from src.components.upload import render_model_selector, render_upload_section  # noqa: E402
 from src.services.api_client import (  # noqa: E402
     APIError,
     get_gcp_credentials_status,
