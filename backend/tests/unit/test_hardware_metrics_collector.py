@@ -1,4 +1,5 @@
 """Unit tests for platform hardware metrics collector."""
+
 from __future__ import annotations
 
 import uuid
@@ -78,9 +79,13 @@ async def test_collector_records_cpu_hardware_from_fake_gke(temp_db, monkeypatch
 
     await collector.poll_running_deployments()
 
-    samples = HARDWARE_CPU_UTILIZATION.labels(
-        deployment_id=dep_id, user_id="test_user", hardware_type="cpu"
-    ).collect()[0].samples
+    samples = (
+        HARDWARE_CPU_UTILIZATION.labels(
+            deployment_id=dep_id, user_id="test_user", hardware_type="cpu"
+        )
+        .collect()[0]
+        .samples
+    )
     assert samples[0].value == pytest.approx(0.35)
 
 
@@ -107,17 +112,29 @@ async def test_collector_records_gpu_hardware_from_lightning(temp_db, monkeypatc
     collector = HardwareMetricsCollector(lightning_ai_provider_factory=lambda: fake_lightning)
     await collector.poll_running_deployments()
 
-    cpu_samples = HARDWARE_CPU_UTILIZATION.labels(
-        deployment_id=dep_id, user_id="test_user", hardware_type="gpu"
-    ).collect()[0].samples
+    cpu_samples = (
+        HARDWARE_CPU_UTILIZATION.labels(
+            deployment_id=dep_id, user_id="test_user", hardware_type="gpu"
+        )
+        .collect()[0]
+        .samples
+    )
     assert cpu_samples[0].value == pytest.approx(0.1)
 
-    gpu_samples = HARDWARE_GPU_UTILIZATION.labels(
-        deployment_id=dep_id, user_id="test_user", hardware_type="gpu"
-    ).collect()[0].samples
+    gpu_samples = (
+        HARDWARE_GPU_UTILIZATION.labels(
+            deployment_id=dep_id, user_id="test_user", hardware_type="gpu"
+        )
+        .collect()[0]
+        .samples
+    )
     assert gpu_samples[0].value == pytest.approx(0.72)
 
-    mem_samples = HARDWARE_MEMORY_UTILIZATION.labels(
-        deployment_id=dep_id, user_id="test_user", hardware_type="gpu"
-    ).collect()[0].samples
+    mem_samples = (
+        HARDWARE_MEMORY_UTILIZATION.labels(
+            deployment_id=dep_id, user_id="test_user", hardware_type="gpu"
+        )
+        .collect()[0]
+        .samples
+    )
     assert mem_samples[0].value == pytest.approx(0.45)

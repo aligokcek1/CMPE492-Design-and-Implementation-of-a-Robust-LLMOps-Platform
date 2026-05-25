@@ -1,4 +1,5 @@
 """Emoji-free deployment status presentation."""
+
 from __future__ import annotations
 
 import streamlit as st

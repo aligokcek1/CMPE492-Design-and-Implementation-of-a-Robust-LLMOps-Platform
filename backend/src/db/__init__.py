@@ -32,7 +32,9 @@ def get_engine() -> Engine:
         url = _build_database_url()
         connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
         _engine = create_engine(url, future=True, connect_args=connect_args)
-        _SessionFactory = sessionmaker(bind=_engine, autoflush=False, expire_on_commit=False, future=True)
+        _SessionFactory = sessionmaker(
+            bind=_engine, autoflush=False, expire_on_commit=False, future=True
+        )
     return _engine
 
 

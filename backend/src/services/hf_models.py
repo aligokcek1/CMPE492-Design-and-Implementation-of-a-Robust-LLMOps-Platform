@@ -5,6 +5,7 @@ v1 (per spec Assumption #3). This module parses HF metadata and returns a
 boolean + reason so the API layer can return a structured 400 for unsupported
 types (image classification, ASR, etc).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -42,9 +43,7 @@ async def is_supported_text_generation_model(
         try:
             return api.model_info(hf_model_id, token=hf_token or None, timeout=timeout)
         except RepositoryNotFoundError as exc:
-            raise RepositoryNotFoundError(
-                f"HuggingFace repo '{hf_model_id}' not found."
-            ) from exc
+            raise RepositoryNotFoundError(f"HuggingFace repo '{hf_model_id}' not found.") from exc
 
     try:
         info = await loop.run_in_executor(None, _fetch)
@@ -52,9 +51,13 @@ async def is_supported_text_generation_model(
         return False, "unknown", str(exc)
     except HfHubHTTPError as exc:
         if exc.response is not None and exc.response.status_code == 403:
-            return False, "access_denied", (
-                f"Token lacks read access to '{hf_model_id}'. "
-                "Ensure your HuggingFace token has read permission for this repository."
+            return (
+                False,
+                "access_denied",
+                (
+                    f"Token lacks read access to '{hf_model_id}'. "
+                    "Ensure your HuggingFace token has read permission for this repository."
+                ),
             )
         return False, "unknown", f"Failed to fetch HF metadata: {exc}"
     except (requests.exceptions.Timeout, TimeoutError, OSError):

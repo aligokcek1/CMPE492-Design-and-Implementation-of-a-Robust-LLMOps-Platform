@@ -1,4 +1,5 @@
 """Unit tests for fleet overview counting and visibility filter."""
+
 from __future__ import annotations
 
 from src.ui.fleet_counts import compute_fleet_counts, filter_visible_deployments
@@ -16,11 +17,13 @@ def test_active_running_only():
 
 
 def test_provisioning_includes_queued_deploying_deleting():
-    counts = compute_fleet_counts([
-        _dep("queued"),
-        _dep("deploying"),
-        _dep("deleting"),
-    ])
+    counts = compute_fleet_counts(
+        [
+            _dep("queued"),
+            _dep("deploying"),
+            _dep("deleting"),
+        ]
+    )
     assert counts.provisioning == 3
     assert counts.active == 0
 
@@ -31,11 +34,13 @@ def test_failed_includes_failed_and_lost():
 
 
 def test_deleted_excluded_from_all_buckets():
-    counts = compute_fleet_counts([
-        _dep("deleted"),
-        _dep("running"),
-        _dep("failed"),
-    ])
+    counts = compute_fleet_counts(
+        [
+            _dep("deleted"),
+            _dep("running"),
+            _dep("failed"),
+        ]
+    )
     assert counts.active == 1
     assert counts.failed == 1
     assert counts.provisioning == 0

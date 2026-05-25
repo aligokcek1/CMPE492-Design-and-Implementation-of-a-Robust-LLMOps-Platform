@@ -1,9 +1,9 @@
 name: CD
 
 on:
-  push:
-    branches: [main]
-    tags: ["v*"]
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -14,9 +14,63 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  gate:
+    name: Verify CI passed on deployable ref
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    outputs:
+      ref: ${{ steps.deploy.outputs.ref }}
+      is_main: ${{ steps.deploy.outputs.is_main }}
+      deploy: ${{ steps.deploy.outputs.deploy }}
+      version_tag: ${{ steps.deploy.outputs.version_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+
+      - id: deploy
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            REF="${{ github.sha }}"
+            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+              IS_MAIN=true
+            else
+              IS_MAIN=false
+            fi
+            DEPLOY=true
+          else
+            REF="${{ github.event.workflow_run.head_sha }}"
+            BRANCH="${{ github.event.workflow_run.head_branch }}"
+            if [ "$BRANCH" = "main" ]; then
+              IS_MAIN=true
+              DEPLOY=true
+            elif TAG="$(git describe --tags --exact-match HEAD 2>/dev/null)" && [[ "$TAG" == v* ]]; then
+              IS_MAIN=false
+              DEPLOY=true
+            else
+              IS_MAIN=false
+              DEPLOY=false
+            fi
+          fi
+
+          VERSION_TAG=""
+          if TAG="$(git describe --tags --exact-match HEAD 2>/dev/null)" && [[ "$TAG" == v* ]]; then
+            VERSION_TAG="$TAG"
+          fi
+
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          echo "is_main=$IS_MAIN" >> "$GITHUB_OUTPUT"
+          echo "deploy=$DEPLOY" >> "$GITHUB_OUTPUT"
+          echo "version_tag=$VERSION_TAG" >> "$GITHUB_OUTPUT"
+
   publish:
     name: Publish container images
     runs-on: ubuntu-latest
+    needs: gate
+    if: needs.gate.outputs.deploy == 'true'
     strategy:
       matrix:
         include:
@@ -28,6 +82,8 @@ jobs:
             image: llmops-frontend
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.gate.outputs.ref }}
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -45,10 +101,11 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
           tags: |
-            type=ref,event=branch
-            type=ref,event=tag
             type=sha,prefix=
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=latest,enable=${{ needs.gate.outputs.is_main == 'true' }}
+            type=semver,pattern={{version}},enable=${{ needs.gate.outputs.version_tag != '' }}
+            type=semver,pattern=v{{version}},enable=${{ needs.gate.outputs.version_tag != '' }}
+            type=raw,value=${{ needs.gate.outputs.version_tag }},enable=${{ needs.gate.outputs.version_tag != '' }}
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -61,12 +118,14 @@ jobs:
           cache-to: type=gha,mode=max
 
   compose-stack:
-    name: Publish compose manifest (main only)
+    name: Validate compose manifest
     runs-on: ubuntu-latest
-    needs: publish
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [gate, publish]
+    if: needs.gate.outputs.deploy == 'true' && needs.gate.outputs.is_main == 'true'
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.gate.outputs.ref }}
 
       - name: Validate compose file
         run: docker compose config --quiet

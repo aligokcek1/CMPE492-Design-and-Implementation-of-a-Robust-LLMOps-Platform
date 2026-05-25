@@ -1,4 +1,5 @@
 """Deployment metrics and Grafana signed redirect endpoints."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -21,7 +22,9 @@ def _require_running_owned_deployment(deployment_id: str, username: str):
     if row.user_id != username:
         raise HTTPException(status_code=403, detail="Deployment belongs to another user.")
     if row.status != "running":
-        raise HTTPException(status_code=404, detail="Metrics are only available for running deployments.")
+        raise HTTPException(
+            status_code=404, detail="Metrics are only available for running deployments."
+        )
     return row
 
 

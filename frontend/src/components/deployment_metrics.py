@@ -1,4 +1,5 @@
 """Native Streamlit metrics panel for running deployments (feature 010)."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -73,7 +74,9 @@ def render_deployment_metrics_panel(
             throughput = summary.get("throughput_value")
             unit = summary.get("throughput_unit", "tokens_per_second")
             unit_label = "tok/s" if unit == "tokens_per_second" else "req/s"
-            st.metric("Throughput", f"{throughput:.2f} {unit_label}" if throughput is not None else "—")
+            st.metric(
+                "Throughput", f"{throughput:.2f} {unit_label}" if throughput is not None else "—"
+            )
 
         if summary.get("failed_requests_excluded"):
             st.caption("Failed requests are excluded from TTFT and throughput calculations.")
@@ -100,7 +103,7 @@ def render_deployment_metrics_panel(
             try:
                 link = get_grafana_link(token, deployment_id)
                 st.markdown(
-                    f'[Open Grafana dashboard]({link["redirect_url"]})',
+                    f"[Open Grafana dashboard]({link['redirect_url']})",
                     unsafe_allow_html=True,
                 )
             except APIError as exc:

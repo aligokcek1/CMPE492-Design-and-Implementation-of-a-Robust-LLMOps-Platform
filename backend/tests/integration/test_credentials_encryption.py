@@ -11,6 +11,7 @@ If Fernet encryption were accidentally disabled or replaced with a passthrough
 shim, this test fails loudly — which matters because the stored blob is the
 only place a user's GCP SA key lives at rest.
 """
+
 from __future__ import annotations
 
 import json
@@ -20,13 +21,15 @@ from sqlalchemy import select
 
 
 def _sample_sa_json() -> str:
-    return json.dumps({
-        "type": "service_account",
-        "project_id": "secret-proj-12345",
-        "private_key_id": "kid",
-        "private_key": "-----BEGIN PRIVATE KEY-----\nTOPSECRET\n-----END PRIVATE KEY-----\n",
-        "client_email": "sa@secret-proj-12345.iam.gserviceaccount.com",
-    })
+    return json.dumps(
+        {
+            "type": "service_account",
+            "project_id": "secret-proj-12345",
+            "private_key_id": "kid",
+            "private_key": "-----BEGIN PRIVATE KEY-----\nTOPSECRET\n-----END PRIVATE KEY-----\n",
+            "client_email": "sa@secret-proj-12345.iam.gserviceaccount.com",
+        }
+    )
 
 
 @pytest.mark.asyncio
@@ -48,7 +51,9 @@ async def test_sa_json_stored_encrypted_and_round_trips(temp_db, fake_gcp_provid
 
     session_factory = get_session_factory()
     with session_factory() as db:
-        row = db.execute(select(GCPCredentialsRow).where(GCPCredentialsRow.user_id == "alice")).scalar_one()
+        row = db.execute(
+            select(GCPCredentialsRow).where(GCPCredentialsRow.user_id == "alice")
+        ).scalar_one()
 
         stored_blob: bytes = row.service_account_json_encrypted
         assert isinstance(stored_blob, bytes)

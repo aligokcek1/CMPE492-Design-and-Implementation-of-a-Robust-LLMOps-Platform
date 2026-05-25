@@ -2,6 +2,7 @@
 
 Covers: Login -> Upload -> Select Model -> Deploy (all mocked at API boundary).
 """
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -10,6 +11,7 @@ from streamlit.testing.v1 import AppTest
 from tests.helpers.api_mocks import make_get_side_effect, mock_json_response
 
 APP_MODULE = "src/app.py"
+
 
 def _val(el) -> str:
     """Return the text value of a Streamlit test element."""
@@ -40,14 +42,10 @@ def test_login_with_valid_token(at):
             },
         )
         at.run()
-        token_input = next(
-            (ti for ti in at.text_input if "token" in ti.label.lower()), None
-        )
+        token_input = next((ti for ti in at.text_input if "token" in ti.label.lower()), None)
         assert token_input is not None, "Token input not found"
         token_input.input("hf_test_token_valid")
-        sign_in_btn = next(
-            (b for b in at.button if "sign in" in b.label.lower()), None
-        )
+        sign_in_btn = next((b for b in at.button if "sign in" in b.label.lower()), None)
         assert sign_in_btn is not None, "Sign In button not found"
         sign_in_btn.click().run()
 
@@ -63,14 +61,10 @@ def test_login_with_invalid_token(at):
         mock_post.return_value = mock_resp
 
         at.run()
-        token_input = next(
-            (ti for ti in at.text_input if "token" in ti.label.lower()), None
-        )
+        token_input = next((ti for ti in at.text_input if "token" in ti.label.lower()), None)
         assert token_input is not None
         token_input.input("hf_invalid_token")
-        sign_in_btn = next(
-            (b for b in at.button if "sign in" in b.label.lower()), None
-        )
+        sign_in_btn = next((b for b in at.button if "sign in" in b.label.lower()), None)
         assert sign_in_btn is not None
         sign_in_btn.click().run()
 
@@ -121,8 +115,7 @@ def test_public_repo_deploy_section_renders(at):
     at.run()
     assert not at.exception
     repo_inputs = [
-        ti for ti in at.text_input
-        if "public" in ti.label.lower() or "repo" in ti.label.lower()
+        ti for ti in at.text_input if "public" in ti.label.lower() or "repo" in ti.label.lower()
     ]
     assert len(repo_inputs) >= 1, "Expected a text input for public repo ID in Deploy tab"
 
@@ -191,8 +184,9 @@ def test_upload_shows_per_folder_progress(at):
     at.run()
     assert not at.exception
     rendered = " ".join(_val(e) for e in list(at.markdown) + list(at.success))
-    assert "weights" in rendered or "tokenizer" in rendered, \
+    assert "weights" in rendered or "tokenizer" in rendered, (
         "Expected per-folder result rows after upload"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -253,6 +247,7 @@ def test_select_existing_use_model_pre_populates_deploy_tab(at):
 # =========================================================================== #
 # 009 — Upload-to-Deploy shortcut + My Upload badge (T025, T028, T029)         #
 # =========================================================================== #
+
 
 def test_upload_shortcut_pre_populates_deploy_tab(at):
     """T025: When shortcut_deploy_model is set in session, Deploy tab shows pre-populated message."""
@@ -528,4 +523,3 @@ def test_invalid_gcp_credentials_banner_references_settings(at):
     warnings = " ".join(_val(w) for w in at.warning)
     assert "GCP credentials are invalid" in warnings
     assert "Settings" in warnings and "GCP Credentials" in warnings
-

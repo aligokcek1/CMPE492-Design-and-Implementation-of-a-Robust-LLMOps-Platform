@@ -69,8 +69,9 @@ class GCPProvider(Protocol):
     the import-guard test in `tests/contract/test_test_isolation.py`.
     """
 
-    async def validate_credentials(self, sa_json: str, billing_account_id: str) -> ValidationResult:
-        ...
+    async def validate_credentials(
+        self, sa_json: str, billing_account_id: str
+    ) -> ValidationResult: ...
 
     async def create_project(self, user_id: str, deployment_id: str, project_id: str) -> str:
         """Create a brand-new GCP project with the given ``project_id`` and return it.
@@ -87,26 +88,22 @@ class GCPProvider(Protocol):
         """Enable the APIs we need (Compute, Container, CloudBilling)."""
         ...
 
-    async def attach_billing(self, project_id: str, billing_account_id: str) -> None:
-        ...
+    async def attach_billing(self, project_id: str, billing_account_id: str) -> None: ...
 
     async def create_gke_cluster(
         self,
         project_id: str,
         cluster_name: str,
         region: str,
-    ) -> ClusterHandle:
-        ...
+    ) -> ClusterHandle: ...
 
     async def get_kube_config(self, project_id: str, cluster_name: str, region: str) -> str:
         """Return a kubeconfig YAML string scoped to the given cluster."""
         ...
 
-    async def delete_project(self, project_id: str) -> None:
-        ...
+    async def delete_project(self, project_id: str) -> None: ...
 
-    async def project_exists(self, project_id: str) -> bool:
-        ...
+    async def project_exists(self, project_id: str) -> bool: ...
 
 
 __all__ = [

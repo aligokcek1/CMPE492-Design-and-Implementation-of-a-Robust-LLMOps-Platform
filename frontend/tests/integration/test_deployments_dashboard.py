@@ -1,4 +1,5 @@
 """Integration tests for the refactored Deployments dashboard (feature 011)."""
+
 from __future__ import annotations
 
 from unittest.mock import patch

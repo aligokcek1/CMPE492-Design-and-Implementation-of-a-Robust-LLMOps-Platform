@@ -79,8 +79,7 @@ def start_upload(
     to create subdirectories in the target repository.
     """
     multipart_files = [
-        ("files", (name, uf.getvalue(), "application/octet-stream"))
-        for name, uf in uploaded_files
+        ("files", (name, uf.getvalue(), "application/octet-stream")) for name, uf in uploaded_files
     ]
     response = requests.post(
         f"{BACKEND_URL}/api/upload/start",

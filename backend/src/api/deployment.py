@@ -190,11 +190,7 @@ async def create_deployment(
 
     # Determine ownership before evaluating the gate result so we can apply the
     # correct bypass logic for user-uploaded models.
-    model_origin = (
-        "uploaded"
-        if payload.hf_model_id.split("/")[0] == session.username
-        else "public"
-    )
+    model_origin = "uploaded" if payload.hf_model_id.split("/")[0] == session.username else "public"
 
     if not is_supported:
         if pipeline_tag == "unreachable":

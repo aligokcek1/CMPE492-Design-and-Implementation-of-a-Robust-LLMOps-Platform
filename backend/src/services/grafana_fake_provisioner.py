@@ -1,4 +1,5 @@
 """In-memory Grafana provisioner for contract tests."""
+
 from __future__ import annotations
 
 

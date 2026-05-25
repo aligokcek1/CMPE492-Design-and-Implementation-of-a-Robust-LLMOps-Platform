@@ -196,7 +196,9 @@ class CredentialsStore:
     # ------------------------------------------------------------------ #
     # background-health hook (used by T062a in US4)                      #
     # ------------------------------------------------------------------ #
-    async def record_credentials_invalid(self, *, user_id: str, error: GCPProviderError | Exception) -> None:
+    async def record_credentials_invalid(
+        self, *, user_id: str, error: GCPProviderError | Exception
+    ) -> None:
         """Flip `validation_status='invalid'` when a background provider call
         fails with an auth/permission error. Safe to call when no row exists
         (it becomes a no-op).

@@ -1,4 +1,5 @@
 """Poll platform APIs and export per-deployment hardware gauges to Prometheus."""
+
 from __future__ import annotations
 
 import logging

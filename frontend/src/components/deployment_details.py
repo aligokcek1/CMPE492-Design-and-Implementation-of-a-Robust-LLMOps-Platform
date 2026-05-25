@@ -1,4 +1,5 @@
 """Per-deployment detail disclosure (metrics, inference, diagnostics)."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -55,10 +56,7 @@ def _render_inference_panel(deployment_id: str, endpoint_url: str | None) -> Non
                 )
             except APIError as exc:
                 if exc.status_code == 504:
-                    st.error(
-                        "Model did not respond within 120 seconds. "
-                        "Click Send again to retry."
-                    )
+                    st.error("Model did not respond within 120 seconds. Click Send again to retry.")
                 elif exc.status_code == 409:
                     st.error(f"Deployment is not running: {exc.detail}")
                 else:

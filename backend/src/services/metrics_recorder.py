@@ -1,4 +1,5 @@
 """Prometheus metric instrumentation for inference proxy traffic."""
+
 from __future__ import annotations
 
 import os

@@ -45,18 +45,18 @@ async def upload_model_folder(
 
     results: list[FolderUploadResult] = []
     entries = sorted(os.listdir(local_path))
-    has_root_files = any(
-        os.path.isfile(os.path.join(local_path, e)) for e in entries
-    )
+    has_root_files = any(os.path.isfile(os.path.join(local_path, e)) for e in entries)
     subdirs = [e for e in entries if os.path.isdir(os.path.join(local_path, e))]
 
     if has_root_files and not subdirs:
+
         def _upload_flat():
             return api.upload_folder(
                 folder_path=local_path,
                 repo_id=repo_id,
                 repo_type="model",
             )
+
         try:
             await loop.run_in_executor(None, _upload_flat)
         except HfHubHTTPError as exc:
@@ -68,6 +68,7 @@ async def upload_model_folder(
         return results
 
     if has_root_files:
+
         def _upload_root_files():
             return api.upload_folder(
                 folder_path=local_path,
@@ -76,6 +77,7 @@ async def upload_model_folder(
                 allow_patterns=["*"],
                 ignore_patterns=["*/"],
             )
+
         try:
             await loop.run_in_executor(None, _upload_root_files)
         except Exception:
@@ -94,21 +96,32 @@ async def upload_model_folder(
 
         try:
             await loop.run_in_executor(None, _upload_subdir)
-            results.append(FolderUploadResult(
-                folder_name=folder_name, status="success",
-            ))
+            results.append(
+                FolderUploadResult(
+                    folder_name=folder_name,
+                    status="success",
+                )
+            )
         except HfHubHTTPError as exc:
             if exc.response.status_code == 409:
                 raise PermissionError(f"Repository conflict for {repo_id}: {exc}") from exc
             if exc.response.status_code == 403:
                 raise PermissionError(f"Token lacks write permission for {repo_id}: {exc}") from exc
-            results.append(FolderUploadResult(
-                folder_name=folder_name, status="error", error=str(exc),
-            ))
+            results.append(
+                FolderUploadResult(
+                    folder_name=folder_name,
+                    status="error",
+                    error=str(exc),
+                )
+            )
         except Exception as exc:
-            results.append(FolderUploadResult(
-                folder_name=folder_name, status="error", error=str(exc),
-            ))
+            results.append(
+                FolderUploadResult(
+                    folder_name=folder_name,
+                    status="error",
+                    error=str(exc),
+                )
+            )
 
     return results
 
@@ -148,9 +161,6 @@ async def list_user_models(token: str) -> list[dict[str, Any]]:
         user_info = api.whoami()
         username = user_info["name"]
         repos = api.list_models(author=username)
-        return [
-            {"id": repo.id, "name": repo.modelId}
-            for repo in repos
-        ]
+        return [{"id": repo.id, "name": repo.modelId} for repo in repos]
 
     return await loop.run_in_executor(None, _list)

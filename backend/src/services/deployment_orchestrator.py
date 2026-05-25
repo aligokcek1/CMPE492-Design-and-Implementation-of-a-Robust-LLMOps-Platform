@@ -19,6 +19,7 @@ T062a). Running deployments are NEVER touched as a side effect of that
 flip — only the NEW deploys/deletes are blocked (that block lives in the
 API layer).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -90,7 +91,9 @@ class DeploymentOrchestrator:
         """Drive ``queued → deploying → running`` or ``failed`` (with cleanup)."""
         row = deployment_store.get(deployment_id)
         if row is None:
-            logger.warning("Deployment %s vanished before orchestrator picked it up.", deployment_id)
+            logger.warning(
+                "Deployment %s vanished before orchestrator picked it up.", deployment_id
+            )
             return
 
         if row.status != "queued":
@@ -106,7 +109,9 @@ class DeploymentOrchestrator:
         user_id = row.user_id
         project_id = row.gcp_project_id
 
-        def set_status(status: str, message: str | None = None, endpoint_url: str | None = None) -> None:
+        def set_status(
+            status: str, message: str | None = None, endpoint_url: str | None = None
+        ) -> None:
             deployment_store.update_status(
                 deployment_id=deployment_id,
                 status=status,
@@ -135,7 +140,9 @@ class DeploymentOrchestrator:
 
         try:
             await _wrap(
-                gcp_provider.create_project(user_id=user_id, deployment_id=deployment_id, project_id=project_id),
+                gcp_provider.create_project(
+                    user_id=user_id, deployment_id=deployment_id, project_id=project_id
+                ),
                 user_id=user_id,
             )
             project_created = True
@@ -148,7 +155,9 @@ class DeploymentOrchestrator:
                 )
 
             await _wrap(
-                gcp_provider.attach_billing(project_id=project_id, billing_account_id=billing_account_id),
+                gcp_provider.attach_billing(
+                    project_id=project_id, billing_account_id=billing_account_id
+                ),
                 user_id=user_id,
             )
             set_status("deploying", "Enabling required GCP services…")
@@ -215,7 +224,9 @@ class DeploymentOrchestrator:
                     "GCP project %s in place so the user can inspect / retry / "
                     "delete via the UI (Autopilot bring-up is slow, auto-rollback "
                     "would discard ~15-25 min of provisioning).",
-                    deployment_id, row.gke_cluster_name, project_id,
+                    deployment_id,
+                    row.gke_cluster_name,
+                    project_id,
                 )
         except Exception as exc:  # noqa: BLE001 — capture final safety net
             logger.exception("Deployment %s failed with unexpected error.", deployment_id)
@@ -230,7 +241,9 @@ class DeploymentOrchestrator:
                     "Deployment %s failed AFTER cluster %s was up — leaving the "
                     "GCP project %s in place so the user can inspect / retry / "
                     "delete via the UI.",
-                    deployment_id, row.gke_cluster_name, project_id,
+                    deployment_id,
+                    row.gke_cluster_name,
+                    project_id,
                 )
 
     async def _run_lightning_ai(self, row: DeploymentRow, *, provider: LightningAIProvider) -> None:
@@ -238,7 +251,9 @@ class DeploymentOrchestrator:
         deployment_id = row.id
         user_id = row.user_id
 
-        def set_status(status: str, message: str | None = None, endpoint_url: str | None = None) -> None:
+        def set_status(
+            status: str, message: str | None = None, endpoint_url: str | None = None
+        ) -> None:
             deployment_store.update_status(
                 deployment_id=deployment_id,
                 status=status,
@@ -250,12 +265,19 @@ class DeploymentOrchestrator:
 
         creds = await lightning_ai_credentials_store.get_credentials(user_id=user_id)
         if creds is None:
-            set_status("failed", "Lightning AI credentials were removed before deployment could start.")
+            set_status(
+                "failed", "Lightning AI credentials were removed before deployment could start."
+            )
             return
 
         try:
             hf_token = _hf_token_for_user(row.user_id)
-            lightning_ai_deployment_id, endpoint_url, teamspace_id, deployment_uuid = await provider.deploy(
+            (
+                lightning_ai_deployment_id,
+                endpoint_url,
+                teamspace_id,
+                deployment_uuid,
+            ) = await provider.deploy(
                 hf_model_id=row.hf_model_id,
                 api_key=creds.api_key,
                 lightning_user_id=creds.lightning_user_id,
@@ -270,7 +292,11 @@ class DeploymentOrchestrator:
             )
 
             if endpoint_url:
-                set_status("running", "GPU inference server live on Lightning AI.", endpoint_url=endpoint_url)
+                set_status(
+                    "running",
+                    "GPU inference server live on Lightning AI.",
+                    endpoint_url=endpoint_url,
+                )
                 logger.info("GPU deployment %s reached RUNNING at %s", deployment_id, endpoint_url)
                 _schedule_monitoring_provision(deployment_id)
             else:
@@ -354,7 +380,9 @@ class DeploymentOrchestrator:
                 status_message=f"Delete failed: {exc.message}. You may retry.",
             )
 
-    async def _delete_lightning_ai(self, row: DeploymentRow, *, provider: LightningAIProvider) -> None:
+    async def _delete_lightning_ai(
+        self, row: DeploymentRow, *, provider: LightningAIProvider
+    ) -> None:
         deployment_id = row.id
         deployment_store.update_status(
             deployment_id=deployment_id,
@@ -435,7 +463,9 @@ class DeploymentOrchestrator:
         except GCPProviderError as exc:
             logger.debug(
                 "Status refresh for %s (project %s) skipped: %s",
-                row.id, row.gcp_project_id, exc,
+                row.id,
+                row.gcp_project_id,
+                exc,
             )
             return
 
@@ -449,7 +479,9 @@ class DeploymentOrchestrator:
                 ),
             )
 
-    async def _refresh_lightning_ai_status(self, row: DeploymentRow, *, provider: LightningAIProvider) -> None:
+    async def _refresh_lightning_ai_status(
+        self, row: DeploymentRow, *, provider: LightningAIProvider
+    ) -> None:
         lai_id = row.lightning_ai_deployment_id
         if not lai_id:
             return
@@ -527,6 +559,7 @@ def _schedule_monitoring_decommission(deployment_id: str) -> None:
 # --------------------------------------------------------------------------- #
 # helpers                                                                     #
 # --------------------------------------------------------------------------- #
+
 
 async def _wrap(awaitable: Awaitable, *, user_id: str):
     """Invoke an awaitable and translate any GCPAuthError into a credential

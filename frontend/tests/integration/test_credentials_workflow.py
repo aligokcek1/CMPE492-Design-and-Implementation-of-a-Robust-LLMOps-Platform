@@ -1,4 +1,5 @@
 """Frontend integration test for the GCP credentials flow (US1)."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -35,10 +36,7 @@ def test_credentials_form_renders_empty_state(authed_at):
         authed_at.run()
 
     assert not authed_at.exception
-    assert any(
-        "No GCP credentials configured yet" in _val(el)
-        for el in authed_at.info
-    )
+    assert any("No GCP credentials configured yet" in _val(el) for el in authed_at.info)
 
 
 def test_credentials_form_shows_configured_status(authed_at):
@@ -60,8 +58,7 @@ def test_credentials_form_shows_configured_status(authed_at):
 
     assert not authed_at.exception
     assert any(
-        "valid" in _val(el).lower() and "configured" in _val(el).lower()
-        for el in authed_at.success
+        "valid" in _val(el).lower() and "configured" in _val(el).lower() for el in authed_at.success
     )
 
 
@@ -83,9 +80,7 @@ def test_credentials_form_shows_invalid_warning(authed_at):
         authed_at.run()
 
     assert not authed_at.exception
-    assert any(
-        "invalid" in _val(el).lower() for el in authed_at.warning
-    )
+    assert any("invalid" in _val(el).lower() for el in authed_at.warning)
 
 
 def _val(el) -> str:

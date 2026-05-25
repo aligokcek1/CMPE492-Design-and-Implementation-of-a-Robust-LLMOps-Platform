@@ -103,7 +103,9 @@ async def test_get_session_status_expired_semantic_payload(transport):
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             login = await client.post("/api/auth/verify", json={"token": "hf_valid_token"})
             session_token = login.json()["session_token"]
-            session_store._sessions[session_token].expires_at = datetime.now(UTC) - timedelta(seconds=1)  # noqa: SLF001
+            session_store._sessions[session_token].expires_at = datetime.now(UTC) - timedelta(
+                seconds=1
+            )  # noqa: SLF001
             response = await client.get(
                 "/api/auth/session",
                 headers={"Authorization": f"Bearer {session_token}"},

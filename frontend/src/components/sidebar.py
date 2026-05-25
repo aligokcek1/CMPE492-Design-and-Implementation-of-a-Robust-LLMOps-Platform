@@ -1,4 +1,5 @@
 """Sidebar profile strip and Settings panel for cloud credentials."""
+
 from __future__ import annotations
 
 import streamlit as st

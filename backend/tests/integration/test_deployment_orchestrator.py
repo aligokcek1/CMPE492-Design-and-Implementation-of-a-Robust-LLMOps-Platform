@@ -4,6 +4,7 @@ All of these share the same test file per the plan, which is why T031/T047/T056
 are NOT flagged ``[P]`` in tasks.md — they must be appended sequentially here
 to avoid merge conflicts.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -17,23 +18,26 @@ from sqlalchemy import select
 # Helpers                                                                     #
 # --------------------------------------------------------------------------- #
 
+
 def _seed_credentials(user_id: str = "alice") -> None:
     from src.db import get_session_factory
     from src.db.models import GCPCredentialsRow
 
     session_factory = get_session_factory()
     with session_factory() as db:
-        db.add(GCPCredentialsRow(
-            user_id=user_id,
-            service_account_json_encrypted=b"not-real-encrypted",
-            billing_account_id="billingAccounts/ABCDEF-012345-67890X",
-            service_account_email="sa@example.iam.gserviceaccount.com",
-            gcp_project_id_of_sa="sa-parent",
-            last_validated_at=datetime.now(UTC),
-            validation_status="valid",
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        ))
+        db.add(
+            GCPCredentialsRow(
+                user_id=user_id,
+                service_account_json_encrypted=b"not-real-encrypted",
+                billing_account_id="billingAccounts/ABCDEF-012345-67890X",
+                service_account_email="sa@example.iam.gserviceaccount.com",
+                gcp_project_id_of_sa="sa-parent",
+                last_validated_at=datetime.now(UTC),
+                validation_status="valid",
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            )
+        )
         db.commit()
 
 
@@ -54,7 +58,9 @@ def _fetch_row(deployment_id: str):
 
     session_factory = get_session_factory()
     with session_factory() as db:
-        return db.execute(select(DeploymentRow).where(DeploymentRow.id == deployment_id)).scalar_one()
+        return db.execute(
+            select(DeploymentRow).where(DeploymentRow.id == deployment_id)
+        ).scalar_one()
 
 
 def _create_queued_row(user_id: str, model_id: str, project_id: str | None = None) -> str:
@@ -64,18 +70,21 @@ def _create_queued_row(user_id: str, model_id: str, project_id: str | None = Non
     dep_id = str(uuid.uuid4())
     session_factory = get_session_factory()
     with session_factory() as db:
-        db.add(DeploymentRow(
-            id=dep_id,
-            user_id=user_id,
-            hf_model_id=model_id,
-            hf_model_display_name=model_id.split("/")[-1],
-            gcp_project_id=project_id or f"llmops-{dep_id.replace('-', '')[:8]}-{dep_id.replace('-', '')[8:14]}",
-            gke_cluster_name="llmops-cluster",
-            gke_region="us-central1",
-            status="queued",
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        ))
+        db.add(
+            DeploymentRow(
+                id=dep_id,
+                user_id=user_id,
+                hf_model_id=model_id,
+                hf_model_display_name=model_id.split("/")[-1],
+                gcp_project_id=project_id
+                or f"llmops-{dep_id.replace('-', '')[:8]}-{dep_id.replace('-', '')[8:14]}",
+                gke_cluster_name="llmops-cluster",
+                gke_region="us-central1",
+                status="queued",
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            )
+        )
         db.commit()
     return dep_id
 
@@ -83,6 +92,7 @@ def _create_queued_row(user_id: str, model_id: str, project_id: str | None = Non
 # --------------------------------------------------------------------------- #
 # T030 — happy-path state machine                                              #
 # --------------------------------------------------------------------------- #
+
 
 @pytest.mark.asyncio
 async def test_orchestrator_happy_path_reaches_running(temp_db, fake_gcp_provider):
@@ -108,6 +118,7 @@ async def test_orchestrator_happy_path_reaches_running(temp_db, fake_gcp_provide
 # --------------------------------------------------------------------------- #
 # T031 — failure path with partial-resources cleanup                           #
 # --------------------------------------------------------------------------- #
+
 
 @pytest.mark.asyncio
 async def test_orchestrator_failure_path_rolls_back_partial_resources(temp_db, fake_gcp_provider):
@@ -135,9 +146,11 @@ async def test_orchestrator_failure_path_rolls_back_partial_resources(temp_db, f
 # T047 — status-refresh flips to `lost` when project missing                   #
 # --------------------------------------------------------------------------- #
 
+
 @pytest.mark.asyncio
 async def test_status_refresh_marks_running_deployment_as_lost_when_project_gone(
-    temp_db, fake_gcp_provider,
+    temp_db,
+    fake_gcp_provider,
 ):
     _seed_credentials("alice")
 
@@ -149,19 +162,21 @@ async def test_status_refresh_marks_running_deployment_as_lost_when_project_gone
     project_id = "llmops-ghost01-abcdef"
     session_factory = get_session_factory()
     with session_factory() as db:
-        db.add(DeploymentRow(
-            id=dep_id,
-            user_id="alice",
-            hf_model_id="Qwen/Qwen3-1.7B",
-            hf_model_display_name="Qwen3 1.7B",
-            gcp_project_id=project_id,
-            gke_cluster_name="llmops-cluster",
-            gke_region="us-central1",
-            status="running",
-            endpoint_url="http://1.2.3.4:80",
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        ))
+        db.add(
+            DeploymentRow(
+                id=dep_id,
+                user_id="alice",
+                hf_model_id="Qwen/Qwen3-1.7B",
+                hf_model_display_name="Qwen3 1.7B",
+                gcp_project_id=project_id,
+                gke_cluster_name="llmops-cluster",
+                gke_region="us-central1",
+                status="running",
+                endpoint_url="http://1.2.3.4:80",
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            )
+        )
         db.commit()
 
     from src.services.deployment_orchestrator import deployment_orchestrator
@@ -175,16 +190,20 @@ async def test_status_refresh_marks_running_deployment_as_lost_when_project_gone
     row = _fetch_row(dep_id)
     assert row.status == "lost"
     assert row.status_message is not None
-    assert "no longer exists" in row.status_message.lower() or "deleted" in row.status_message.lower()
+    assert (
+        "no longer exists" in row.status_message.lower() or "deleted" in row.status_message.lower()
+    )
 
 
 # --------------------------------------------------------------------------- #
 # T056 — delete-in-progress cancels orchestrator and transitions to deleted    #
 # --------------------------------------------------------------------------- #
 
+
 @pytest.mark.asyncio
 async def test_delete_during_deploy_transitions_through_deleting_to_deleted(
-    temp_db, fake_gcp_provider,
+    temp_db,
+    fake_gcp_provider,
 ):
     _seed_credentials("alice")
     dep_id = _create_queued_row("alice", "Qwen/Qwen3-1.7B")
@@ -198,6 +217,7 @@ async def test_delete_during_deploy_transitions_through_deleting_to_deleted(
     # real route does and, crucially, registers the task so request_deletion
     # can cancel it.
     from src.services.lightning_ai_fake_provider import FakeLightningAIProvider
+
     fake_lai = FakeLightningAIProvider()
 
     deployment_orchestrator.schedule(

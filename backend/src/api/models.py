@@ -40,7 +40,11 @@ async def get_public_model(
     except RepositoryNotFoundError:
         raise HTTPException(status_code=404, detail="Repository not found")
     except HfHubHTTPError as exc:
-        if hasattr(exc, "response") and exc.response is not None and exc.response.status_code == 403:
+        if (
+            hasattr(exc, "response")
+            and exc.response is not None
+            and exc.response.status_code == 403
+        ):
             raise HTTPException(status_code=403, detail="Repository is private")
         raise HTTPException(status_code=500, detail=str(exc))
     except Exception as exc:

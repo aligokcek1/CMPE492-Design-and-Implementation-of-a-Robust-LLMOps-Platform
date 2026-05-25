@@ -126,8 +126,14 @@ def _rebuild_deployments_if_needed() -> None:
         conn.execute(text(_DEPLOYMENTS_COPY_DDL))
         conn.execute(text("DROP TABLE deployments"))
         conn.execute(text("ALTER TABLE deployments_new RENAME TO deployments"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_deployments_user_id ON deployments (user_id)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_deployments_user_status ON deployments (user_id, status)"))
+        conn.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_deployments_user_id ON deployments (user_id)")
+        )
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_deployments_user_status ON deployments (user_id, status)"
+            )
+        )
     logger.info("Deployments table rebuild complete.")
 
 
@@ -172,10 +178,12 @@ def _ensure_deployment_monitoring_table() -> None:
     logger.info("Creating `deployment_monitoring` table.")
     with engine.begin() as conn:
         conn.execute(text(_DEPLOYMENT_MONITORING_DDL))
-        conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS ix_deployment_monitoring_user_id "
-            "ON deployment_monitoring (user_id)"
-        ))
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_deployment_monitoring_user_id "
+                "ON deployment_monitoring (user_id)"
+            )
+        )
 
 
 __all__ = ["ensure_schema"]

@@ -1,4 +1,5 @@
 """Prometheus query client with server-side label injection."""
+
 from __future__ import annotations
 
 import logging
@@ -32,12 +33,16 @@ _HARDWARE_PERCENT_SCALE = 100.0
 class MetricsQueryClient(Protocol):
     async def query(self, promql: str) -> dict: ...
 
-    async def query_range(self, promql: str, *, start: datetime, end: datetime, step: str) -> dict: ...
+    async def query_range(
+        self, promql: str, *, start: datetime, end: datetime, step: str
+    ) -> dict: ...
 
 
 class HttpMetricsQueryClient:
     def __init__(self, *, base_url: str | None = None) -> None:
-        self._base_url = (base_url or os.environ.get("LLMOPS_PROMETHEUS_URL", "http://localhost:9090")).rstrip("/")
+        self._base_url = (
+            base_url or os.environ.get("LLMOPS_PROMETHEUS_URL", "http://localhost:9090")
+        ).rstrip("/")
 
     async def query(self, promql: str) -> dict:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -209,7 +214,11 @@ class MetricsQueryService:
         platform_label = "GKE / TGI" if hardware_type == "cpu" else "Lightning AI / GPU"
         end = datetime.now(UTC)
         start = end - timedelta(seconds=_RANGE_SECONDS[range])
-        step = "60s" if range == MetricsRange.one_hour else ("300s" if range == MetricsRange.twenty_four_hours else "3600s")
+        step = (
+            "60s"
+            if range == MetricsRange.one_hour
+            else ("300s" if range == MetricsRange.twenty_four_hours else "3600s")
+        )
 
         try:
             avg_ttft_data = await self._client.query(
@@ -223,8 +232,8 @@ class MetricsQueryService:
                 f"sum(rate(llmops_tokens_total{labels}[5m]))"
             )
             error_count_data = await self._client.query(
-                f'sum(increase(llmops_inference_requests_total'
-                f'{_label_filter(deployment_id, user_id, outcome="error")}[5m]))'
+                f"sum(increase(llmops_inference_requests_total"
+                f"{_label_filter(deployment_id, user_id, outcome='error')}[5m]))"
             )
 
             ttft_series_data = await self._client.query_range(
@@ -240,15 +249,9 @@ class MetricsQueryService:
                 step=step,
             )
 
-            cpu_data = await self._client.query(
-                f"llmops_hardware_cpu_utilization{labels}"
-            )
-            mem_data = await self._client.query(
-                f"llmops_hardware_memory_utilization{labels}"
-            )
-            gpu_data = await self._client.query(
-                f"llmops_hardware_gpu_utilization{labels}"
-            )
+            cpu_data = await self._client.query(f"llmops_hardware_cpu_utilization{labels}")
+            mem_data = await self._client.query(f"llmops_hardware_memory_utilization{labels}")
+            gpu_data = await self._client.query(f"llmops_hardware_gpu_utilization{labels}")
             cpu_series_data = await self._client.query_range(
                 f"llmops_hardware_cpu_utilization{labels}",
                 start=start,
@@ -289,8 +292,8 @@ class MetricsQueryService:
         throughput_unit: str = "tokens_per_second"
         if throughput_value is None or throughput_value == 0:
             req_rate_data = await self._client.query(
-                f'sum(rate(llmops_inference_requests_total'
-                f'{_label_filter(deployment_id, user_id, outcome="success")}[5m]))'
+                f"sum(rate(llmops_inference_requests_total"
+                f"{_label_filter(deployment_id, user_id, outcome='success')}[5m]))"
             )
             throughput_value = _scalar_from_vector(req_rate_data)
             throughput_unit = "requests_per_second"
@@ -326,7 +329,9 @@ class MetricsQueryService:
             ),
             "gpu_utilization": HardwareSeries(
                 available=gpu_available,
-                reason=None if gpu_available else ("no_data" if hardware_type == "gpu" else _GPU_NA_REASON),
+                reason=None
+                if gpu_available
+                else ("no_data" if hardware_type == "gpu" else _GPU_NA_REASON),
                 unit="percent",
                 label="GPU utilization",
                 series=_hardware_percent_series(gpu_series_data) if gpu_available else [],

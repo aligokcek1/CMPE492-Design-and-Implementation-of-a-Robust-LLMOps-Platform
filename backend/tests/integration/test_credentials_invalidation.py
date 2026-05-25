@@ -9,6 +9,7 @@ This is the integration test for FR-015 / T062a. It verifies:
    return 409 with ``{"code": "credentials_invalid"}``.
 3. Already-running deployments are NOT torn down as a side effect.
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -36,17 +37,19 @@ def _seed_valid_credentials(user_id: str = "alice") -> None:
 
     session_factory = get_session_factory()
     with session_factory() as db:
-        db.add(GCPCredentialsRow(
-            user_id=user_id,
-            service_account_json_encrypted=b"placeholder-never-decrypted-in-this-test",
-            billing_account_id="billingAccounts/ABCDEF-012345-67890X",
-            service_account_email="sa@example.iam.gserviceaccount.com",
-            gcp_project_id_of_sa="sa-parent",
-            last_validated_at=datetime.now(UTC),
-            validation_status="valid",
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        ))
+        db.add(
+            GCPCredentialsRow(
+                user_id=user_id,
+                service_account_json_encrypted=b"placeholder-never-decrypted-in-this-test",
+                billing_account_id="billingAccounts/ABCDEF-012345-67890X",
+                service_account_email="sa@example.iam.gserviceaccount.com",
+                gcp_project_id_of_sa="sa-parent",
+                last_validated_at=datetime.now(UTC),
+                validation_status="valid",
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            )
+        )
         db.commit()
 
 
@@ -59,19 +62,21 @@ def _seed_running_deployment(user_id: str = "alice") -> str:
     dep_id = str(uuid.uuid4())
     session_factory = get_session_factory()
     with session_factory() as db:
-        db.add(DeploymentRow(
-            id=dep_id,
-            user_id=user_id,
-            hf_model_id="Qwen/Qwen3-1.7B",
-            hf_model_display_name="Qwen3 1.7B",
-            gcp_project_id="llmops-existing-running-01",
-            gke_cluster_name="llmops-cluster",
-            gke_region="us-central1",
-            status="running",
-            endpoint_url="http://1.2.3.4:80",
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        ))
+        db.add(
+            DeploymentRow(
+                id=dep_id,
+                user_id=user_id,
+                hf_model_id="Qwen/Qwen3-1.7B",
+                hf_model_display_name="Qwen3 1.7B",
+                gcp_project_id="llmops-existing-running-01",
+                gke_cluster_name="llmops-cluster",
+                gke_region="us-central1",
+                status="running",
+                endpoint_url="http://1.2.3.4:80",
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            )
+        )
         db.commit()
     return dep_id
 
@@ -90,7 +95,9 @@ def _read_validation_status(user_id: str) -> str:
 
 @pytest.mark.asyncio
 async def test_auth_failure_in_background_flips_credentials_to_invalid(
-    temp_db, fake_gcp_provider, app_with_overrides,
+    temp_db,
+    fake_gcp_provider,
+    app_with_overrides,
 ):
     from src.services.gcp_fake_provider import GCPAuthError
 
@@ -117,15 +124,15 @@ async def test_auth_failure_in_background_flips_credentials_to_invalid(
 
     session_factory = get_session_factory()
     with session_factory() as db:
-        row = db.execute(
-            select(DeploymentRow).where(DeploymentRow.id == running_id)
-        ).scalar_one()
+        row = db.execute(select(DeploymentRow).where(DeploymentRow.id == running_id)).scalar_one()
     assert row.status == "running"
 
 
 @pytest.mark.asyncio
 async def test_post_and_delete_blocked_after_credentials_flipped_invalid(
-    temp_db, fake_gcp_provider, app_with_overrides,
+    temp_db,
+    fake_gcp_provider,
+    app_with_overrides,
 ):
     from httpx import ASGITransport
 
@@ -142,8 +149,9 @@ async def test_post_and_delete_blocked_after_credentials_flipped_invalid(
     transport = ASGITransport(app=app_with_overrides)
 
     # Skip the HF model gate for this test (we're asserting preflight, not routing).
-    with patch("src.api.deployment.hf_models.is_supported_text_generation_model",
-               new_callable=AsyncMock) as gate:
+    with patch(
+        "src.api.deployment.hf_models.is_supported_text_generation_model", new_callable=AsyncMock
+    ) as gate:
         gate.return_value = (True, "text-generation", "ok")
 
         async with AsyncClient(transport=transport, base_url="http://test") as client:
