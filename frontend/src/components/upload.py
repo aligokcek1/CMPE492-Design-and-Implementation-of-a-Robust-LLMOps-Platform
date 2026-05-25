@@ -127,7 +127,7 @@ def render_upload_section() -> None:
                 )
                 if result.get("deploy_shortcut"):
                     st.info(
-                        "✅ Model uploaded! Go to the **🚀 Deploy** tab to deploy it immediately."
+                        "Model uploaded. Open the **Deploy** tab to deploy it immediately."
                     )
             except APIError as exc:
                 st.session_state.pop("upload_result", None)
@@ -162,8 +162,8 @@ def render_upload_section() -> None:
 
 def render_model_selector() -> None:
     """Render the existing HF model selection UI."""
-    st.subheader("Or Select an Existing Hugging Face Model")
-    st.markdown("### 📤 My Uploads")
+    st.subheader("Select an Existing Hugging Face Model")
+    st.markdown("### My Uploads")
     st.caption(
         "All models below are from your HuggingFace account. "
         "They include both privately uploaded models and any public repos you own."
@@ -206,7 +206,7 @@ def render_model_selector() -> None:
     if st.button("Use Selected Model", key="btn_use_model", use_container_width=True):
         st.session_state["selected_model"] = selected
         st.session_state["shortcut_deploy_model"] = selected
-        st.toast(f"Selected model: {selected}", icon="🤗")
+        st.toast(f"Selected model: {selected}")
         st.success(
-            f"Model **{selected}** selected. Go to the **🚀 Deploy to Cloud** tab to deploy it."
+            f"Model **{selected}** selected. Go to the **Deploy** tab to deploy it."
         )

@@ -1,6 +1,10 @@
 # LLMOps Platform
 
+[![License: BSD-2-Clause](https://img.shields.io/badge/License-BSD%202--Clause-blue.svg)](LICENSE)
+
 Event-driven pipeline for LLM lifecycle management: upload models, deploy to GKE (CPU) or Lightning AI (GPU), run inference, and monitor TTFT/throughput via Prometheus and Grafana.
+
+**License:** [BSD 2-Clause](LICENSE) — Copyright (c) 2026, Ali GÖKÇEK
 
 **Requirements:** Python 3.11, Docker (optional, for monitoring stack)
 
@@ -97,3 +101,11 @@ Then start the backend as above. Real deployments still need GCP and/or Lightnin
 
 - Backend env vars, routes, GCP prerequisites: [`backend/README.md`](backend/README.md)
 - Metrics monitoring E2E: [`specs/010-prometheus-grafana-monitoring/quickstart.md`](specs/010-prometheus-grafana-monitoring/quickstart.md)
+
+## License
+
+This project is licensed under the **BSD 2-Clause License**. See [`LICENSE`](LICENSE) for the full text.
+
+Copyright (c) 2026, Ali GÖKÇEK
+
+You may use, modify, and redistribute this software under the terms of the license, provided that Redistributions retain the copyright notice and disclaimer.

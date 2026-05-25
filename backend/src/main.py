@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: BSD-2-Clause
+# Copyright (c) 2026, Ali GÖKÇEK
+"""LLMOps Platform FastAPI application entry point."""
+
 from __future__ import annotations
 
 import asyncio

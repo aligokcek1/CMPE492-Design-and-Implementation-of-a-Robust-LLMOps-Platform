@@ -158,5 +158,5 @@ Python 3.11: Follow standard conventions. Ruff for linting.
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan:
-`specs/010-prometheus-grafana-monitoring/plan.md`
+`specs/011-streamlit-dashboard-refactor/plan.md`
 <!-- SPECKIT END -->
