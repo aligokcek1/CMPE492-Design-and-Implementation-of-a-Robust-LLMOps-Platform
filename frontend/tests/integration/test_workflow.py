@@ -6,9 +6,10 @@ import pytest
 from unittest.mock import patch, MagicMock
 from streamlit.testing.v1 import AppTest
 
+from tests.helpers.api_mocks import make_get_side_effect, mock_json_response
+
 
 APP_MODULE = "src/app.py"
-
 
 def _val(el) -> str:
     """Return the text value of a Streamlit test element."""
@@ -20,6 +21,7 @@ def at():
     return AppTest.from_file(APP_MODULE, default_timeout=30)
 
 
+@pytest.mark.no_api_patch
 def test_unauthenticated_user_sees_login(at):
     at.run()
     assert not at.exception
@@ -52,6 +54,7 @@ def test_login_with_valid_token(at):
     assert not at.exception
 
 
+@pytest.mark.no_api_patch
 def test_login_with_invalid_token(at):
     with patch("src.services.api_client.requests.post") as mock_post:
         mock_resp = MagicMock(ok=False, status_code=401)
@@ -210,11 +213,12 @@ def test_public_deploy_shows_hardware_selector_and_deploy_button(at):
         "file_count": 12,
         "size_bytes": 440473133,
     }
-    with patch("src.services.api_client.requests.get") as mock_get:
-        mock_get.return_value = MagicMock(
-            ok=True,
-            json=lambda: {"configured": True, "validation_status": "valid"},
-        )
+    with patch(
+        "src.services.api_client.requests.get",
+        side_effect=make_get_side_effect(
+            gcp={"configured": True, "validation_status": "valid"},
+        ),
+    ):
         at.run()
     assert not at.exception
     # Deploy button should be present (disabled until hardware selected)
@@ -233,9 +237,7 @@ def test_select_existing_use_model_pre_populates_deploy_tab(at):
     at.session_state["_session_checked"] = True
     at.session_state["shortcut_deploy_model"] = "testuser/my-model"
 
-    credentials_response = MagicMock(ok=True, json=lambda: {"configured": False})
-    with patch("src.services.api_client.requests.get", return_value=credentials_response), \
-         patch("src.services.api_client.requests.post", return_value=credentials_response):
+    with patch("src.services.api_client.requests.post", return_value=mock_json_response({})):
         at.run()
 
     assert not at.exception
@@ -259,10 +261,7 @@ def test_upload_shortcut_pre_populates_deploy_tab(at):
     at.session_state["_session_checked"] = True
     at.session_state["shortcut_deploy_model"] = "testuser/my-uploaded-model"
 
-    credentials_response = MagicMock(ok=True, json=lambda: {"configured": False})
-
-    with patch("src.services.api_client.requests.get", return_value=credentials_response), \
-         patch("src.services.api_client.requests.post", return_value=credentials_response):
+    with patch("src.services.api_client.requests.post", return_value=mock_json_response({})):
         at.run()
 
     assert not at.exception
@@ -281,27 +280,24 @@ def test_my_upload_badge_shown_for_uploaded_origin(at):
     at.session_state["hf_username"] = "testuser"
     at.session_state["_session_checked"] = True
 
-    deployments_response = MagicMock(
-        ok=True,
-        json=lambda: [
-            {
-                "id": "dep-001",
-                "hf_model_id": "testuser/my-model",
-                "hf_model_display_name": "My Model",
-                "hardware_type": "cpu",
-                "model_origin": "uploaded",
-                "status": "running",
-                "status_message": "Running",
-                "endpoint_url": "http://1.2.3.4:80",
-                "created_at": "2026-01-01T00:00:00Z",
-                "updated_at": "2026-01-01T00:00:00Z",
-            }
-        ],
-    )
-    credentials_response = MagicMock(ok=True, json=lambda: {"configured": False})
-
-    with patch("src.services.api_client.requests.get", return_value=deployments_response), \
-         patch("src.services.api_client.requests.post", return_value=credentials_response):
+    deployments = [
+        {
+            "id": "dep-001",
+            "hf_model_id": "testuser/my-model",
+            "hf_model_display_name": "My Model",
+            "hardware_type": "cpu",
+            "model_origin": "uploaded",
+            "status": "running",
+            "status_message": "Running",
+            "endpoint_url": "http://1.2.3.4:80",
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z",
+        }
+    ]
+    with patch(
+        "src.services.api_client.requests.get",
+        side_effect=make_get_side_effect(deployments=deployments),
+    ):
         at.run()
 
     assert not at.exception
@@ -309,9 +305,8 @@ def test_my_upload_badge_shown_for_uploaded_origin(at):
         str(getattr(el, "value", "") or getattr(el, "body", "") or "")
         for el in list(at.markdown) + list(at.text)
     )
-    # Badge uses "My Upload**" (singular, bold); header uses "My Uploads" (plural)
-    assert "My Upload**" in all_text, (
-        "Expected '📤 My Upload' badge to appear for model_origin='uploaded' deployment"
+    assert "Uploaded" in all_text, (
+        "Expected 'Uploaded' label for model_origin='uploaded' deployment"
     )
 
 
@@ -321,27 +316,24 @@ def test_no_badge_for_public_origin(at):
     at.session_state["hf_username"] = "testuser"
     at.session_state["_session_checked"] = True
 
-    deployments_response = MagicMock(
-        ok=True,
-        json=lambda: [
-            {
-                "id": "dep-002",
-                "hf_model_id": "org/public-model",
-                "hf_model_display_name": "Public Model",
-                "hardware_type": "cpu",
-                "model_origin": "public",
-                "status": "running",
-                "status_message": "Running",
-                "endpoint_url": "http://1.2.3.4:80",
-                "created_at": "2026-01-01T00:00:00Z",
-                "updated_at": "2026-01-01T00:00:00Z",
-            }
-        ],
-    )
-    credentials_response = MagicMock(ok=True, json=lambda: {"configured": False})
-
-    with patch("src.services.api_client.requests.get", return_value=deployments_response), \
-         patch("src.services.api_client.requests.post", return_value=credentials_response):
+    deployments = [
+        {
+            "id": "dep-002",
+            "hf_model_id": "org/public-model",
+            "hf_model_display_name": "Public Model",
+            "hardware_type": "cpu",
+            "model_origin": "public",
+            "status": "running",
+            "status_message": "Running",
+            "endpoint_url": "http://1.2.3.4:80",
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z",
+        }
+    ]
+    with patch(
+        "src.services.api_client.requests.get",
+        side_effect=make_get_side_effect(deployments=deployments),
+    ):
         at.run()
 
     assert not at.exception
@@ -349,12 +341,12 @@ def test_no_badge_for_public_origin(at):
         str(getattr(el, "value", "") or getattr(el, "body", "") or "")
         for el in list(at.markdown) + list(at.text)
     )
-    # Badge uses "My Upload**" (singular, bold); section header uses "My Uploads" (plural) — check badge only
-    assert "My Upload**" not in all_text, (
-        "Expected NO '📤 My Upload' badge for model_origin='public' deployment"
+    assert "**Uploaded**" not in all_text and " · **Uploaded**" not in all_text, (
+        "Expected NO 'Uploaded' badge for model_origin='public' deployment"
     )
 
 
+@pytest.mark.no_api_patch
 def test_expired_session_prompt_and_context_recovery_hint(at):
     at.session_state["last_auth_error"] = "Session expired. Please sign in again."
     at.session_state["pending_action"] = {"type": "deploy", "model_repository": "user/model"}
@@ -385,42 +377,15 @@ def test_metrics_expander_visible_on_running_deployment(at):
     at.session_state["hf_username"] = "testuser"
     at.session_state["_session_checked"] = True
 
-    deployments_response = MagicMock(ok=True, json=lambda: [_running_deployment()])
-    metrics_response = MagicMock(
-        ok=True,
-        json=lambda: {
-            "deployment_id": "dep-metrics-001",
-            "hardware_type": "cpu",
-            "platform_label": "GKE / TGI",
-            "range": "1h",
-            "summary": {
-                "ttft_avg_seconds": 0.5,
-                "ttft_p95_seconds": 1.0,
-                "throughput_value": 10.0,
-                "throughput_unit": "tokens_per_second",
-                "failed_requests_excluded": False,
-            },
-            "series": {"ttft": [], "throughput": [], "hardware": {}},
-            "empty": False,
-        },
-    )
-
-    def mock_get(url, **kwargs):
-        if "/metrics/grafana" in url:
-            return MagicMock(
-                ok=True,
-                json=lambda: {"redirect_url": "http://localhost:8000/api/metrics/grafana/redirect?token=abc"},
-            )
-        if "/metrics" in url:
-            return metrics_response
-        return deployments_response
-
-    with patch("src.services.api_client.requests.get", side_effect=mock_get):
+    with patch(
+        "src.services.api_client.requests.get",
+        side_effect=make_get_side_effect(deployments=[_running_deployment()]),
+    ):
         at.run()
 
     assert not at.exception
     expander_labels = [e.label for e in at.expander]
-    assert any("Metrics" in label for label in expander_labels)
+    assert any("Details" in label for label in expander_labels)
 
 
 def test_metrics_expander_absent_on_deleted_deployment(at):
@@ -428,15 +393,16 @@ def test_metrics_expander_absent_on_deleted_deployment(at):
     at.session_state["hf_username"] = "testuser"
     at.session_state["_session_checked"] = True
 
-    deployments_response = MagicMock(
-        ok=True,
-        json=lambda: [_running_deployment(status="deleted", endpoint_url=None)],
-    )
-    with patch("src.services.api_client.requests.get", return_value=deployments_response):
+    with patch(
+        "src.services.api_client.requests.get",
+        side_effect=make_get_side_effect(
+            deployments=[_running_deployment(status="deleted", endpoint_url=None)],
+        ),
+    ):
         at.run()
 
     assert not at.exception
-    assert not any("Metrics" in e.label for e in at.expander)
+    assert not any(s.label == "Time range" for s in at.selectbox)
 
 
 def test_metrics_time_range_selector(at):
@@ -466,13 +432,19 @@ def test_metrics_time_range_selector(at):
             "empty": False,
         }
 
-    def mock_get(url, **kwargs):
+    def handler(url, *args, **kwargs):
         if "/metrics" in url and "grafana" not in url:
             range_calls.append(kwargs.get("params", {}).get("range", "1h"))
-            return MagicMock(ok=True, json=metrics_json)
-        return MagicMock(ok=True, json=lambda: [_running_deployment()])
+            return mock_json_response(metrics_json())
+        return None
 
-    with patch("src.services.api_client.requests.get", side_effect=mock_get):
+    with patch(
+        "src.services.api_client.requests.get",
+        side_effect=make_get_side_effect(
+            deployments=[_running_deployment()],
+            handler=handler,
+        ),
+    ):
         at.run()
 
     assert not at.exception
@@ -484,36 +456,33 @@ def test_gpu_metrics_shows_lightning_label_and_gpu_na(at):
     at.session_state["hf_username"] = "testuser"
     at.session_state["_session_checked"] = True
 
-    def mock_get(url, **kwargs):
-        if "/metrics" in url and "grafana" not in url:
-            return MagicMock(
-                ok=True,
-                json=lambda: {
-                    "deployment_id": "dep-gpu-001",
-                    "hardware_type": "gpu",
-                    "platform_label": "Lightning AI / GPU",
-                    "range": "1h",
-                    "summary": {"throughput_unit": "tokens_per_second", "failed_requests_excluded": False},
-                    "series": {
-                        "ttft": [],
-                        "throughput": [],
-                        "hardware": {
-                            "gpu_utilization": {
-                                "available": False,
-                                "reason": "not_available_for_this_deployment_type",
-                                "series": [],
-                            }
-                        },
-                    },
-                    "empty": False,
-                },
-            )
-        return MagicMock(
-            ok=True,
-            json=lambda: [_running_deployment(id="dep-gpu-001", hardware_type="gpu")],
-        )
+    gpu_metrics = {
+        "deployment_id": "dep-gpu-001",
+        "hardware_type": "gpu",
+        "platform_label": "Lightning AI / GPU",
+        "range": "1h",
+        "summary": {"throughput_unit": "tokens_per_second", "failed_requests_excluded": False},
+        "series": {
+            "ttft": [],
+            "throughput": [],
+            "hardware": {
+                "gpu_utilization": {
+                    "available": False,
+                    "reason": "not_available_for_this_deployment_type",
+                    "series": [],
+                }
+            },
+        },
+        "empty": False,
+    }
 
-    with patch("src.services.api_client.requests.get", side_effect=mock_get):
+    with patch(
+        "src.services.api_client.requests.get",
+        side_effect=make_get_side_effect(
+            deployments=[_running_deployment(id="dep-gpu-001", hardware_type="gpu")],
+            metrics=gpu_metrics,
+        ),
+    ):
         at.run()
 
     assert not at.exception
@@ -526,34 +495,37 @@ def test_open_in_grafana_button_visible(at):
     at.session_state["hf_username"] = "testuser"
     at.session_state["_session_checked"] = True
 
-    def mock_get(url, **kwargs):
-        if "/metrics/grafana" in url:
-            return MagicMock(
-                ok=True,
-                json=lambda: {
-                    "redirect_url": "http://localhost:8000/api/metrics/grafana/redirect?token=signed",
-                    "expires_at": "2099-01-01T00:00:00Z",
-                },
-            )
-        if "/metrics" in url:
-            return MagicMock(
-                ok=True,
-                json=lambda: {
-                    "deployment_id": "dep-metrics-001",
-                    "hardware_type": "cpu",
-                    "platform_label": "GKE / TGI",
-                    "range": "1h",
-                    "summary": {"throughput_unit": "tokens_per_second", "failed_requests_excluded": False},
-                    "series": {"ttft": [], "throughput": [], "hardware": {}},
-                    "empty": False,
-                },
-            )
-        return MagicMock(ok=True, json=lambda: [_running_deployment()])
-
-    with patch("src.services.api_client.requests.get", side_effect=mock_get):
+    with patch(
+        "src.services.api_client.requests.get",
+        side_effect=make_get_side_effect(deployments=[_running_deployment()]),
+    ):
         at.run()
 
     assert not at.exception
     button_labels = [b.label for b in at.button]
     assert any("Open in Grafana" in label for label in button_labels)
+
+
+def test_invalid_gcp_credentials_banner_references_settings(at):
+    """FR-008: invalid GCP credentials show a main-workspace banner pointing to Settings."""
+    at.session_state["session_token"] = "test_session"
+    at.session_state["hf_username"] = "testuser"
+    at.session_state["_session_checked"] = True
+
+    with patch(
+        "src.services.api_client.requests.get",
+        side_effect=make_get_side_effect(
+            gcp={
+                "configured": True,
+                "validation_status": "invalid",
+                "validation_error_message": "permission denied",
+            },
+        ),
+    ):
+        at.run()
+
+    assert not at.exception
+    warnings = " ".join(_val(w) for w in at.warning)
+    assert "GCP credentials are invalid" in warnings
+    assert "Settings" in warnings and "GCP Credentials" in warnings
 

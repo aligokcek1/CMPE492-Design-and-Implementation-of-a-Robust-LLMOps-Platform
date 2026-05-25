@@ -22,10 +22,16 @@ def _series_to_df(points: list[dict[str, Any]], *, y_label: str = "value") -> pd
     return df[[y_label]]
 
 
-def render_deployment_metrics_panel(deployment_id: str, hardware_type: str) -> None:
-    """Metrics expander for a single running deployment."""
+def render_deployment_metrics_panel(
+    deployment_id: str,
+    hardware_type: str,
+    *,
+    inline: bool = False,
+) -> None:
+    """Metrics panel for a single running deployment."""
     platform = "GKE / TGI" if hardware_type == "cpu" else "Lightning AI / GPU"
-    with st.expander("📈 Metrics", expanded=False):
+
+    def _body() -> None:
         range_options = {"Last hour": "1h", "Last 24 hours": "24h", "Last 7 days": "7d"}
         selected_label = st.selectbox(
             "Time range",
@@ -99,6 +105,13 @@ def render_deployment_metrics_panel(deployment_id: str, hardware_type: str) -> N
                 )
             except APIError as exc:
                 st.error(f"Could not open Grafana: {exc.detail}")
+
+    if inline:
+        st.markdown("**Metrics**")
+        _body()
+    else:
+        with st.expander("Metrics", expanded=False):
+            _body()
 
 
 def _hardware_chart_title(hw_series: dict[str, Any], fallback: str) -> str:

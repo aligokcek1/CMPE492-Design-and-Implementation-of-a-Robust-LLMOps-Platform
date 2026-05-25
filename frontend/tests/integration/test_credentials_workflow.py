@@ -6,6 +6,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from streamlit.testing.v1 import AppTest
 
+from tests.helpers.api_mocks import make_get_side_effect
+
 
 APP_MODULE = "src/app.py"
 
@@ -27,8 +29,10 @@ def _mock_response(json_data: dict, ok: bool = True, status_code: int = 200) -> 
 
 
 def test_credentials_form_renders_empty_state(authed_at):
-    with patch("src.services.api_client.requests.get") as mock_get:
-        mock_get.return_value = _mock_response({"configured": False})
+    with patch(
+        "src.services.api_client.requests.get",
+        side_effect=make_get_side_effect(gcp={"configured": False}),
+    ):
         authed_at.run()
 
     assert not authed_at.exception
@@ -39,16 +43,20 @@ def test_credentials_form_renders_empty_state(authed_at):
 
 
 def test_credentials_form_shows_configured_status(authed_at):
-    with patch("src.services.api_client.requests.get") as mock_get:
-        mock_get.return_value = _mock_response({
-            "configured": True,
-            "service_account_email": "sa@proj.iam.gserviceaccount.com",
-            "gcp_project_id_of_sa": "my-sa-project",
-            "billing_account_id": "billingAccounts/ABCDEF-012345-67890X",
-            "validation_status": "valid",
-            "last_validated_at": "2026-04-16T12:00:00Z",
-            "validation_error_message": None,
-        })
+    with patch(
+        "src.services.api_client.requests.get",
+        side_effect=make_get_side_effect(
+            gcp={
+                "configured": True,
+                "service_account_email": "sa@proj.iam.gserviceaccount.com",
+                "gcp_project_id_of_sa": "my-sa-project",
+                "billing_account_id": "billingAccounts/ABCDEF-012345-67890X",
+                "validation_status": "valid",
+                "last_validated_at": "2026-04-16T12:00:00Z",
+                "validation_error_message": None,
+            },
+        ),
+    ):
         authed_at.run()
 
     assert not authed_at.exception
@@ -59,16 +67,20 @@ def test_credentials_form_shows_configured_status(authed_at):
 
 
 def test_credentials_form_shows_invalid_warning(authed_at):
-    with patch("src.services.api_client.requests.get") as mock_get:
-        mock_get.return_value = _mock_response({
-            "configured": True,
-            "service_account_email": "sa@proj.iam.gserviceaccount.com",
-            "gcp_project_id_of_sa": "my-sa-project",
-            "billing_account_id": "billingAccounts/ABCDEF-012345-67890X",
-            "validation_status": "invalid",
-            "last_validated_at": "2026-04-16T12:00:00Z",
-            "validation_error_message": "permission denied",
-        })
+    with patch(
+        "src.services.api_client.requests.get",
+        side_effect=make_get_side_effect(
+            gcp={
+                "configured": True,
+                "service_account_email": "sa@proj.iam.gserviceaccount.com",
+                "gcp_project_id_of_sa": "my-sa-project",
+                "billing_account_id": "billingAccounts/ABCDEF-012345-67890X",
+                "validation_status": "invalid",
+                "last_validated_at": "2026-04-16T12:00:00Z",
+                "validation_error_message": "permission denied",
+            },
+        ),
+    ):
         authed_at.run()
 
     assert not authed_at.exception

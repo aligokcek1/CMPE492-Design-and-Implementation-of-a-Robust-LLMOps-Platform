@@ -11,6 +11,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from streamlit.testing.v1 import AppTest
 
+from tests.helpers.api_mocks import make_get_side_effect, mock_json_response
+
 
 APP_MODULE = "src/app.py"
 
@@ -47,25 +49,31 @@ def test_deployments_tab_shows_public_deploy_entry(authed_at):
     it calls ``/api/deployments``. We assert that the button is present and
     the deploy panel renders without errors.
     """
-    with patch("src.services.api_client.requests.get") as mock_get, \
-         patch("src.services.api_client.requests.post") as mock_post:
-        # /api/gcp/credentials GET + /api/models GET + /api/models/public GET
-        mock_get.return_value = _mock_resp({
-            "configured": True,
-            "validation_status": "valid",
-            "service_account_email": "sa@proj.iam.gserviceaccount.com",
-            "gcp_project_id_of_sa": "sa-parent",
-            "billing_account_id": "billingAccounts/ABCDEF-012345-67890X",
-            "last_validated_at": "2026-04-16T12:00:00Z",
-        })
-        mock_post.return_value = _mock_resp({
-            "id": "11111111-2222-3333-4444-555555555555",
-            "hf_model_id": "Qwen/Qwen3-1.7B",
-            "status": "queued",
-            "created_at": "2026-04-16T12:00:00Z",
-            "updated_at": "2026-04-16T12:00:00Z",
-        }, status_code=202)
-
+    with patch(
+        "src.services.api_client.requests.get",
+        side_effect=make_get_side_effect(
+            gcp={
+                "configured": True,
+                "validation_status": "valid",
+                "service_account_email": "sa@proj.iam.gserviceaccount.com",
+                "gcp_project_id_of_sa": "sa-parent",
+                "billing_account_id": "billingAccounts/ABCDEF-012345-67890X",
+                "last_validated_at": "2026-04-16T12:00:00Z",
+            },
+        ),
+    ), patch(
+        "src.services.api_client.requests.post",
+        return_value=mock_json_response(
+            {
+                "id": "11111111-2222-3333-4444-555555555555",
+                "hf_model_id": "Qwen/Qwen3-1.7B",
+                "status": "queued",
+                "created_at": "2026-04-16T12:00:00Z",
+                "updated_at": "2026-04-16T12:00:00Z",
+            },
+            status_code=202,
+        ),
+    ):
         authed_at.run()
 
     # App rendered cleanly

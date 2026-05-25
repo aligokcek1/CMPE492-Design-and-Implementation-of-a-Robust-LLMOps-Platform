@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: BSD-2-Clause
+# Copyright (c) 2026, Ali GÖKÇEK
+"""LLMOps Platform Streamlit application entry point."""
+
 import sys
 import os
 
@@ -14,14 +18,12 @@ from src.components.auth import render_login  # noqa: E402
 from src.components.upload import render_upload_section, render_model_selector  # noqa: E402
 from src.components.deploy import render_public_repo_deploy_section  # noqa: E402
 from src.components.deployments_list import render_deployments_list  # noqa: E402
-from src.components.gcp_credentials import render_gcp_credentials_section  # noqa: E402
-from src.components.lightning_ai_credentials import render_lightning_ai_credentials_section  # noqa: E402
+from src.components.sidebar import render_sidebar  # noqa: E402
 from src.services.api_client import (  # noqa: E402
     APIError,
     get_gcp_credentials_status,
     get_lightning_credentials_status,
     get_session_status,
-    logout,
 )
 from src.services.session_client import (  # noqa: E402
     clear_session,
@@ -33,7 +35,7 @@ from src.services.session_client import (  # noqa: E402
 
 st.set_page_config(
     page_title="LLMOps Platform",
-    page_icon="🤗",
+    page_icon=None,
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -76,10 +78,9 @@ def _render_credentials_invalid_banner() -> None:
         gcp_status = get_gcp_credentials_status(token)
         if gcp_status.get("configured") and gcp_status.get("validation_status") == "invalid":
             st.warning(
-                "⚠️ **Your GCP credentials are invalid.** "
-                "New CPU deployments and deletions are blocked until you update them "
-                "in the **☁️ GCP Credentials** tab. Already-running deployments are unaffected.",
-                icon="⚠️",
+                "**GCP credentials are invalid.** New CPU deployments and deletions are "
+                "blocked until you update them under **Settings → GCP Credentials** in "
+                "the sidebar. Running deployments are unaffected."
             )
     except Exception:
         pass
@@ -87,36 +88,11 @@ def _render_credentials_invalid_banner() -> None:
         lai_status = get_lightning_credentials_status(token)
         if lai_status.get("configured") and lai_status.get("validation_status") == "invalid":
             st.warning(
-                "⚡ **Your Lightning AI API key is invalid.** "
-                "New GPU deployments are blocked until you update it "
-                "in the **⚡ Lightning AI** tab.",
-                icon="⚠️",
+                "**Lightning AI API key is invalid.** New GPU deployments are blocked "
+                "until you update it under **Settings → Lightning AI** in the sidebar."
             )
     except Exception:
         pass
-
-
-def render_sidebar() -> None:
-    with st.sidebar:
-        st.title("LLMOps Platform")
-        st.markdown("---")
-        if _is_authenticated():
-            username = st.session_state.get("hf_username", "Unknown")
-            st.success(f"Signed in as **{username}**")
-            if st.button("Sign Out", use_container_width=True):
-                token = get_session_token()
-                if token:
-                    try:
-                        logout(token)
-                    except Exception:
-                        pass
-                clear_session()
-                st.rerun()
-        else:
-            st.info("Not authenticated.")
-
-        st.markdown("---")
-        st.caption("Robust Model Upload Flow · CMPE492")
 
 
 def main() -> None:
@@ -136,24 +112,28 @@ def main() -> None:
                 f"`{pending.get('type', 'previous action')}`."
             )
 
-    st.title("🤗 LLMOps Platform")
+    st.title("LLMOps Platform")
     st.markdown(
-        "Welcome! Use the tabs below to **upload** a local model or **select** an existing one, "
-        "then proceed to **deploy** it."
+        "Upload or select a model, deploy to cloud infrastructure, and monitor "
+        "running deployments from the tabs below."
     )
 
     _render_credentials_invalid_banner()
 
-    tab_upload, tab_select, tab_deploy, tab_deployments, tab_gcp, tab_lightning = st.tabs(
+    tab_deployments, tab_upload, tab_select, tab_deploy = st.tabs(
         [
-            "📤 Upload Model",
-            "🔍 Select Existing",
-            "🚀 Deploy to Cloud",
-            "📊 Deployments",
-            "☁️ GCP Credentials",
-            "⚡ Lightning AI",
+            "Deployments",
+            "Upload Model",
+            "Select Model",
+            "Deploy",
         ]
     )
+
+    with tab_deployments:
+        try:
+            render_deployments_list()
+        except Exception as exc:
+            st.error(f"An unexpected error occurred in the deployments section: {exc}")
 
     with tab_upload:
         try:
@@ -172,24 +152,6 @@ def main() -> None:
             render_public_repo_deploy_section()
         except Exception as exc:
             st.error(f"An unexpected error occurred in the deploy section: {exc}")
-
-    with tab_deployments:
-        try:
-            render_deployments_list()
-        except Exception as exc:
-            st.error(f"An unexpected error occurred in the deployments list: {exc}")
-
-    with tab_gcp:
-        try:
-            render_gcp_credentials_section()
-        except Exception as exc:
-            st.error(f"An unexpected error occurred in the GCP credentials section: {exc}")
-
-    with tab_lightning:
-        try:
-            render_lightning_ai_credentials_section()
-        except Exception as exc:
-            st.error(f"An unexpected error occurred in the Lightning AI credentials section: {exc}")
 
 
 if __name__ == "__main__":

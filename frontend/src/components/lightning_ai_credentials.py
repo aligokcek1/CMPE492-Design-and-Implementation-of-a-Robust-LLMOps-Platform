@@ -100,7 +100,7 @@ def _render_save_form() -> None:
 
 
 def render_lightning_ai_credentials_section() -> None:
-    st.subheader("⚡ Lightning AI credentials")
+    st.subheader("Lightning AI credentials")
     status = _fetch_status()
     if status is None:
         return
