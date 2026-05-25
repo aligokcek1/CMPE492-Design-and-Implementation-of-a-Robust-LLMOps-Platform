@@ -1,4 +1,5 @@
 """CRUD for deployment_monitoring rows."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -86,12 +87,16 @@ class MetricsStore:
     def list_due_for_decommission(self, *, now: datetime) -> list[DeploymentMonitoringRow]:
         session_factory = get_session_factory()
         with session_factory() as db:
-            rows = db.execute(
-                select(DeploymentMonitoringRow).where(
-                    DeploymentMonitoringRow.status == "decommissioning",
-                    DeploymentMonitoringRow.decommission_at <= now,
+            rows = (
+                db.execute(
+                    select(DeploymentMonitoringRow).where(
+                        DeploymentMonitoringRow.status == "decommissioning",
+                        DeploymentMonitoringRow.decommission_at <= now,
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             for row in rows:
                 db.expunge(row)
             return list(rows)

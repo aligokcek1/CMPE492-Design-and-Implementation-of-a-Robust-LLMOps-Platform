@@ -171,7 +171,9 @@ async def test_list_models_expired_session_returns_semantic_code(transport):
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             headers = await _session_auth_headers(client)
             session_token = headers["Authorization"].removeprefix("Bearer ")
-            session_store._sessions[session_token].expires_at = datetime.now(UTC) - timedelta(seconds=1)  # noqa: SLF001
+            session_store._sessions[session_token].expires_at = datetime.now(UTC) - timedelta(
+                seconds=1
+            )  # noqa: SLF001
             response = await client.get("/api/models", headers=headers)
     assert response.status_code == 401
     assert response.json()["detail"]["code"] == "session_expired"

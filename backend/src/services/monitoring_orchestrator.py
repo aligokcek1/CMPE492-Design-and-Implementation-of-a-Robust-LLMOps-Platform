@@ -1,4 +1,5 @@
 """Provision and decommission per-deployment monitoring resources."""
+
 from __future__ import annotations
 
 import asyncio
@@ -67,7 +68,9 @@ class MonitoringOrchestrator:
         if _metrics_disabled():
             return
         decommission_at = datetime.now(UTC) + timedelta(days=_DECOMMISSION_RETENTION_DAYS)
-        metrics_store.mark_decommissioning(deployment_id=deployment_id, decommission_at=decommission_at)
+        metrics_store.mark_decommissioning(
+            deployment_id=deployment_id, decommission_at=decommission_at
+        )
         logger.info(
             "Monitoring decommission scheduled for %s at %s",
             deployment_id,

@@ -76,7 +76,7 @@ async def start_upload(
                 status_code=413,
                 detail=(
                     f"Total upload size exceeds the configured limit "
-                    f"({MAX_UPLOAD_BYTES / (1024 ** 3):.0f} GB). "
+                    f"({MAX_UPLOAD_BYTES / (1024**3):.0f} GB). "
                     "Set LLMOPS_MAX_UPLOAD_BYTES=0 to disable this check."
                 ),
             )

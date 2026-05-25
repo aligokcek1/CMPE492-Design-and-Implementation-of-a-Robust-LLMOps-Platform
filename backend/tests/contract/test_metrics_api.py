@@ -1,4 +1,5 @@
 """Contract tests for deployment metrics API (feature 010)."""
+
 from __future__ import annotations
 
 import uuid
@@ -177,7 +178,9 @@ async def test_metrics_range_query_param(transport):
 
 
 @pytest.mark.asyncio
-async def test_metrics_summary_includes_p95_and_failed_exclusion(transport, fake_metrics_query_client):
+async def test_metrics_summary_includes_p95_and_failed_exclusion(
+    transport, fake_metrics_query_client
+):
     dep_id = _seed_deployment("test_user")
     _seed_monitoring(dep_id)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -215,7 +218,9 @@ async def test_metrics_cpu_hardware_returns_percent_scale(transport):
 
 
 @pytest.mark.asyncio
-async def test_metrics_gpu_hardware_available_when_series_present(transport, fake_metrics_query_client):
+async def test_metrics_gpu_hardware_available_when_series_present(
+    transport, fake_metrics_query_client
+):
     dep_id = _seed_deployment("test_user", hardware_type="gpu")
     _seed_monitoring(dep_id)
     fake_metrics_query_client.gpu_series_available = True
@@ -284,7 +289,9 @@ async def test_grafana_link_foreign_user_returns_403(transport):
 async def test_grafana_redirect_valid_token_302(transport):
     dep_id = _seed_deployment("test_user")
     _seed_monitoring(dep_id)
-    async with AsyncClient(transport=transport, base_url="http://test", follow_redirects=False) as client:
+    async with AsyncClient(
+        transport=transport, base_url="http://test", follow_redirects=False
+    ) as client:
         headers = await _session_auth_headers(client)
         link_resp = await client.get(f"/api/deployments/{dep_id}/metrics/grafana", headers=headers)
         redirect_url = link_resp.json()["redirect_url"]

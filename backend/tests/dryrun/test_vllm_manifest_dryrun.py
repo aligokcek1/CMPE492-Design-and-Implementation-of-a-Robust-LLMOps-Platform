@@ -6,6 +6,7 @@ is actually created on the cluster — the API server performs admission +
 validation and returns the object it *would* have persisted. Zero GCP calls,
 zero cloud side-effects.
 """
+
 from __future__ import annotations
 
 import os
@@ -46,16 +47,10 @@ def test_vllm_manifest_applies_server_side_dry_run():
     for doc in docs:
         kind = doc["kind"]
         if kind == "Deployment":
-            apps_v1.create_namespaced_deployment(
-                namespace=ns, body=doc, dry_run="All"
-            )
+            apps_v1.create_namespaced_deployment(namespace=ns, body=doc, dry_run="All")
         elif kind == "Service":
-            core_v1.create_namespaced_service(
-                namespace=ns, body=doc, dry_run="All"
-            )
+            core_v1.create_namespaced_service(namespace=ns, body=doc, dry_run="All")
         elif kind == "Secret":
-            core_v1.create_namespaced_secret(
-                namespace=ns, body=doc, dry_run="All"
-            )
+            core_v1.create_namespaced_secret(namespace=ns, body=doc, dry_run="All")
         else:
             pytest.fail(f"Unexpected manifest kind: {kind}")

@@ -13,6 +13,7 @@ MUST go through `FakeGCPProvider`. This test asserts that invariant by:
 Any failure here should be treated as CRITICAL — a future test could silently
 start billing a real GCP account.
 """
+
 from __future__ import annotations
 
 import os

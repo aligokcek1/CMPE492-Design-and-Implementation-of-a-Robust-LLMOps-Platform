@@ -1,4 +1,5 @@
 """Fleet health summary metrics for the Deployments tab."""
+
 from __future__ import annotations
 
 import streamlit as st

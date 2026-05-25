@@ -18,6 +18,7 @@ For feature 007 the real implementation lands incrementally:
 Methods that aren't used yet simply raise ``NotImplementedError`` — they'll come
 online as each user story is built out.
 """
+
 from __future__ import annotations
 
 import json
@@ -50,9 +51,7 @@ class RealGCPProvider(GCPProvider):
                     f"Service-account JSON is missing required field '{field_name}'."
                 )
         if parsed["type"] != "service_account":
-            raise GCPProviderError(
-                f"Expected type='service_account', got type={parsed['type']!r}."
-            )
+            raise GCPProviderError(f"Expected type='service_account', got type={parsed['type']!r}.")
         if not re.fullmatch(_BILLING_PATTERN, billing_account_id):
             raise GCPProviderError(
                 "billing_account_id must match pattern billingAccounts/XXXXXX-XXXXXX-XXXXXX."
@@ -69,9 +68,7 @@ class RealGCPProvider(GCPProvider):
                 scopes=["https://www.googleapis.com/auth/cloud-platform"],
             )
         except (ValueError, TypeError) as exc:
-            raise GCPProviderError(
-                f"Service-account JSON rejected by google-auth: {exc}"
-            ) from exc
+            raise GCPProviderError(f"Service-account JSON rejected by google-auth: {exc}") from exc
 
         # Probe 1: we can list projects (implies the SA + GCP-side auth work).
         try:
@@ -159,7 +156,9 @@ class RealGCPProvider(GCPProvider):
                     f"GCP project id {project_id} is already taken; please retry."
                 ) from exc
             except gcp_exceptions.GoogleAPICallError as exc:
-                raise GCPTransientError(f"Transient error during project create: {exc.message}") from exc
+                raise GCPTransientError(
+                    f"Transient error during project create: {exc.message}"
+                ) from exc
 
         await asyncio.get_event_loop().run_in_executor(None, _create)
         return project_id
@@ -213,14 +212,16 @@ class RealGCPProvider(GCPProvider):
                         "  (b) the billing account id you saved is wrong;\n"
                         "  (c) your billing account is closed / suspended.\n\n"
                         "Grant the role with:\n\n"
-                        '  gcloud billing accounts add-iam-policy-binding <BILLING-ACCOUNT-ID> \\\n'
+                        "  gcloud billing accounts add-iam-policy-binding <BILLING-ACCOUNT-ID> \\\n"
                         '      --member="serviceAccount:<YOUR-SA-EMAIL>" \\\n'
                         '      --role="roles/billing.user"\n\n'
                         f"Raw GCP message: {msg}"
                     ) from exc
                 raise GCPProviderError(f"Enable-services precondition failed: {msg}") from exc
             except gcp_exceptions.GoogleAPICallError as exc:
-                raise GCPTransientError(f"Transient error enabling services: {exc.message}") from exc
+                raise GCPTransientError(
+                    f"Transient error enabling services: {exc.message}"
+                ) from exc
 
             # ----------------------------------------------------------------
             # Propagation barrier.
@@ -251,7 +252,9 @@ class RealGCPProvider(GCPProvider):
                     except gcp_exceptions.GoogleAPICallError as probe_exc:
                         log.debug(
                             "get_service(%s) on %s failed during propagation poll: %s",
-                            svc, project_id, probe_exc,
+                            svc,
+                            project_id,
+                            probe_exc,
                         )
                         still_pending.add(svc)
                         continue
@@ -261,7 +264,8 @@ class RealGCPProvider(GCPProvider):
                 if pending:
                     log.info(
                         "Waiting for services %s to propagate on project %s…",
-                        sorted(pending), project_id,
+                        sorted(pending),
+                        project_id,
                     )
                     time.sleep(10)
 
@@ -307,7 +311,7 @@ class RealGCPProvider(GCPProvider):
                         f"not billing-enabled. Your service account likely lacks "
                         f"'roles/billing.user' on billing account '{billing_account_id}'. "
                         "Grant it with:\n\n"
-                        f'  gcloud billing accounts add-iam-policy-binding {billing_account_id.removeprefix("billingAccounts/")} \\\n'
+                        f"  gcloud billing accounts add-iam-policy-binding {billing_account_id.removeprefix('billingAccounts/')} \\\n"
                         '      --member="serviceAccount:<YOUR-SA-EMAIL>" \\\n'
                         '      --role="roles/billing.user"'
                     )
@@ -337,9 +341,9 @@ class RealGCPProvider(GCPProvider):
                         "Fix by deleting dangling projects this billing account is still "
                         "linked to:\n\n"
                         "  # List them:\n"
-                        f'  gcloud billing projects list --billing-account={billing_account_id.removeprefix("billingAccounts/")}\n\n'
+                        f"  gcloud billing projects list --billing-account={billing_account_id.removeprefix('billingAccounts/')}\n\n"
                         "  # Delete the ones you no longer need (e.g. failed deploys):\n"
-                        '  gcloud projects delete <PROJECT-ID>\n\n'
+                        "  gcloud projects delete <PROJECT-ID>\n\n"
                         "Deleted projects are PERMANENTLY removed after ~30 days; the "
                         "billing slot is freed within a few minutes of the delete call. "
                         "Alternatively, request a quota increase at "
@@ -352,7 +356,9 @@ class RealGCPProvider(GCPProvider):
                     f"Attach-billing precondition failed: {raw or exc.message}"
                 ) from exc
             except gcp_exceptions.GoogleAPICallError as exc:
-                raise GCPTransientError(f"Transient error attaching billing: {exc.message}") from exc
+                raise GCPTransientError(
+                    f"Transient error attaching billing: {exc.message}"
+                ) from exc
 
         await asyncio.get_event_loop().run_in_executor(None, _attach)
 
@@ -383,9 +389,7 @@ class RealGCPProvider(GCPProvider):
 
                 deadline = time.monotonic() + 1800
                 while time.monotonic() < deadline:
-                    op = client.get_operation(
-                        name=f"{parent}/operations/{op.name.split('/')[-1]}"
-                    )
+                    op = client.get_operation(name=f"{parent}/operations/{op.name.split('/')[-1]}")
                     if op.status == container_v1.Operation.Status.DONE:
                         break
                     time.sleep(15)
@@ -514,6 +518,7 @@ class RealGCPProvider(GCPProvider):
 # --------------------------------------------------------------------------- #
 # Helpers                                                                     #
 # --------------------------------------------------------------------------- #
+
 
 def _format_precondition_violations(exc: Exception) -> str:
     """Extract the hidden ``violations`` attached to a FailedPrecondition.

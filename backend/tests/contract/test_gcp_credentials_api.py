@@ -8,17 +8,21 @@ import pytest
 from httpx import AsyncClient
 
 
-def _valid_sa_json(email: str = "sa@proj.iam.gserviceaccount.com", project_id: str = "my-sa-project") -> str:
-    return json.dumps({
-        "type": "service_account",
-        "project_id": project_id,
-        "private_key_id": "abc123",
-        "private_key": "-----BEGIN PRIVATE KEY-----\nFAKE\n-----END PRIVATE KEY-----\n",
-        "client_email": email,
-        "client_id": "123",
-        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-        "token_uri": "https://oauth2.googleapis.com/token",
-    })
+def _valid_sa_json(
+    email: str = "sa@proj.iam.gserviceaccount.com", project_id: str = "my-sa-project"
+) -> str:
+    return json.dumps(
+        {
+            "type": "service_account",
+            "project_id": project_id,
+            "private_key_id": "abc123",
+            "private_key": "-----BEGIN PRIVATE KEY-----\nFAKE\n-----END PRIVATE KEY-----\n",
+            "client_email": email,
+            "client_id": "123",
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+        }
+    )
 
 
 _VALID_BILLING = "billingAccounts/ABCDEF-012345-67890X"
@@ -39,6 +43,7 @@ def _bearer(token: str) -> dict[str, str]:
 # --------------------------------------------------------------------------- #
 # T015 — POST /api/gcp/credentials                                             #
 # --------------------------------------------------------------------------- #
+
 
 @pytest.mark.asyncio
 async def test_post_credentials_saves_and_returns_status_200(transport):
@@ -127,6 +132,7 @@ async def test_post_credentials_requires_session_401(transport):
 # T016 — GET /api/gcp/credentials                                              #
 # --------------------------------------------------------------------------- #
 
+
 @pytest.mark.asyncio
 async def test_get_credentials_initial_is_unconfigured(transport):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -172,6 +178,7 @@ async def test_get_credentials_requires_session_401(transport):
 # T017 — DELETE /api/gcp/credentials                                           #
 # --------------------------------------------------------------------------- #
 
+
 @pytest.mark.asyncio
 async def test_delete_credentials_success_204(transport):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -216,18 +223,20 @@ async def test_delete_credentials_blocked_when_active_deployment_exists_409(tran
 
         session_factory = get_session_factory()
         with session_factory() as db:
-            db.add(DeploymentRow(
-                id=str(uuid.uuid4()),
-                user_id="alice",
-                hf_model_id="Qwen/Qwen3-1.7B",
-                hf_model_display_name="Qwen3 1.7B",
-                gcp_project_id=f"llmops-{uuid.uuid4().hex[:8]}-test01",
-                gke_cluster_name="llmops-cluster",
-                gke_region="us-central1",
-                status="running",
-                created_at=datetime.now(UTC),
-                updated_at=datetime.now(UTC),
-            ))
+            db.add(
+                DeploymentRow(
+                    id=str(uuid.uuid4()),
+                    user_id="alice",
+                    hf_model_id="Qwen/Qwen3-1.7B",
+                    hf_model_display_name="Qwen3 1.7B",
+                    gcp_project_id=f"llmops-{uuid.uuid4().hex[:8]}-test01",
+                    gke_cluster_name="llmops-cluster",
+                    gke_region="us-central1",
+                    status="running",
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
+                )
+            )
             db.commit()
 
         resp = await client.delete("/api/gcp/credentials", headers=_bearer(token))

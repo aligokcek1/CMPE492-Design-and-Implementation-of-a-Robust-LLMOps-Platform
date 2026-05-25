@@ -10,6 +10,7 @@ The service remains exposed via a public LoadBalancer endpoint and the backend
 inference proxy adapts the TGI response into the existing OpenAI-style shape
 expected by the frontend.
 """
+
 from __future__ import annotations
 
 import re

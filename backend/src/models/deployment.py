@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 # Kept unchanged for backward compatibility with existing contract tests.      #
 # --------------------------------------------------------------------------- #
 
+
 class ResourceType(str, Enum):
     CPU = "CPU"
     GPU = "GPU"
@@ -39,6 +40,7 @@ class MockDeploymentResponse(BaseModel):
 # Feature 007 — real GKE deployment models                                     #
 # --------------------------------------------------------------------------- #
 
+
 class GkeDeploymentStatus(str, Enum):
     queued = "queued"
     deploying = "deploying"
@@ -50,9 +52,12 @@ class GkeDeploymentStatus(str, Enum):
 
 
 class DeployRequest(BaseModel):
-    hf_model_id: str = Field(..., description="HuggingFace model repository ID, e.g. Qwen/Qwen3-1.7B")
+    hf_model_id: str = Field(
+        ..., description="HuggingFace model repository ID, e.g. Qwen/Qwen3-1.7B"
+    )
     hardware_type: Literal["cpu", "gpu"] = Field(
-        ..., description="Target hardware: 'cpu' routes to GKE/TGI-CPU; 'gpu' routes to Lightning AI/vLLM."
+        ...,
+        description="Target hardware: 'cpu' routes to GKE/TGI-CPU; 'gpu' routes to Lightning AI/vLLM.",
     )
     force: bool = Field(default=False, description="Bypass the duplicate-model confirmation.")
 

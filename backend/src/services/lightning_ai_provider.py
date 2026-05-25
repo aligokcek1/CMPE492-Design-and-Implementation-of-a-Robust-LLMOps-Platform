@@ -9,6 +9,7 @@ Authentication uses LIGHTNING_USER_ID + LIGHTNING_API_KEY env vars
 lock ensures only one thread mutates these process-global env vars at
 a time.
 """
+
 from __future__ import annotations
 
 import os
@@ -94,9 +95,7 @@ class LightningAIProvider(Protocol):
         """
         ...
 
-    async def delete(
-        self, *, deployment_id: str, api_key: str, lightning_user_id: str
-    ) -> None:
+    async def delete(self, *, deployment_id: str, api_key: str, lightning_user_id: str) -> None:
         """Stop and delete a Lightning AI deployment.
 
         Raises LightningAINotFoundError if already gone (caller treats as success).
@@ -192,12 +191,8 @@ class RealLightningAIProvider:
             except Exception as exc:
                 msg = str(exc)
                 if _is_auth_error(msg):
-                    raise LightningAIAuthError(
-                        f"Lightning AI credentials rejected: {msg}"
-                    ) from exc
-                raise LightningAIServiceError(
-                    f"Lightning AI validation failed: {msg}"
-                ) from exc
+                    raise LightningAIAuthError(f"Lightning AI credentials rejected: {msg}") from exc
+                raise LightningAIServiceError(f"Lightning AI validation failed: {msg}") from exc
             finally:
                 _restore_lightning_env(saved)
 
@@ -206,7 +201,9 @@ class RealLightningAIProvider:
     ) -> tuple[str, str | None, str | None, str | None]:
         import asyncio
 
-        return await asyncio.to_thread(self._sync_deploy, hf_model_id, api_key, lightning_user_id, hf_token)
+        return await asyncio.to_thread(
+            self._sync_deploy, hf_model_id, api_key, lightning_user_id, hf_token
+        )
 
     def _sync_deploy(
         self, hf_model_id: str, api_key: str, lightning_user_id: str, hf_token: str = ""
@@ -222,9 +219,7 @@ class RealLightningAIProvider:
                 username = user_record.username
                 teamspace_name = _get_teamspace_name(user_api, lightning_user_id)
 
-                slug = (
-                    hf_model_id.replace("/", "-").replace("_", "-").lower()[:24].strip("-")
-                )
+                slug = hf_model_id.replace("/", "-").replace("_", "-").lower()[:24].strip("-")
                 app_name = f"llmops-{slug}"
 
                 dep = Deployment(name=app_name, teamspace=teamspace_name, user=username)
@@ -387,22 +382,16 @@ class RealLightningAIProvider:
                     raise LightningAINotFoundError(deployment_id) from exc
                 if _is_auth_error(msg):
                     raise LightningAIAuthError(msg) from exc
-                raise LightningAIServiceError(
-                    f"Lightning AI status poll failed: {msg}"
-                ) from exc
+                raise LightningAIServiceError(f"Lightning AI status poll failed: {msg}") from exc
             finally:
                 _restore_lightning_env(saved)
 
-    async def delete(
-        self, *, deployment_id: str, api_key: str, lightning_user_id: str
-    ) -> None:
+    async def delete(self, *, deployment_id: str, api_key: str, lightning_user_id: str) -> None:
         import asyncio
 
         await asyncio.to_thread(self._sync_delete, deployment_id, api_key, lightning_user_id)
 
-    def _sync_delete(
-        self, deployment_id: str, api_key: str, lightning_user_id: str
-    ) -> None:
+    def _sync_delete(self, deployment_id: str, api_key: str, lightning_user_id: str) -> None:
         with _env_lock:
             saved = _set_lightning_env(lightning_user_id, api_key)
             try:

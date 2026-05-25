@@ -3,6 +3,7 @@
 Kept in a separate module so route files can `Depends(get_gcp_provider)`
 without pulling in `src.main` (which would be a circular import).
 """
+
 from __future__ import annotations
 
 import os

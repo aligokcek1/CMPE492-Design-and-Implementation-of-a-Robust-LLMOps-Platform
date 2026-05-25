@@ -135,8 +135,8 @@ GitHub Actions runs on every push and pull request:
 
 | Workflow | Trigger | What it does |
 |----------|---------|--------------|
-| [CI](.github/workflows/ci.yml) | push, PR | Backend + frontend pytest, Ruff lint, Docker Compose build & smoke test |
-| [CD](.github/workflows/cd.yml) | `main`, version tags, manual | Builds and pushes `llmops-backend` / `llmops-frontend` images to GitHub Container Registry |
+| [CI](.github/workflows/ci.yml) | push, PR, version tags | Backend + frontend pytest, Ruff lint/format, then Docker Compose build & smoke test |
+| [CD](.github/workflows/cd.yml) | after green CI on `main`/`v*` tags, manual | Builds and pushes `llmops-backend` / `llmops-frontend` images to GitHub Container Registry |
 
 Pull images after a successful `main` build:
 

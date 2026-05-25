@@ -10,7 +10,9 @@ class LightningAICredentialRequest(BaseModel):
         ...,
         description="Lightning AI platform user UUID (LIGHTNING_USER_ID). Stored plaintext.",
     )
-    api_key: str = Field(..., description="Raw Lightning AI API key. Encrypted at rest; never returned.")
+    api_key: str = Field(
+        ..., description="Raw Lightning AI API key. Encrypted at rest; never returned."
+    )
 
 
 class LightningAICredentialStatus(BaseModel):

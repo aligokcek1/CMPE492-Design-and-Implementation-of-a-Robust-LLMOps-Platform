@@ -50,12 +50,16 @@ class DeploymentStore:
         session_factory = get_session_factory()
         with session_factory() as db:
             # 3-deployment cap (FR-013)
-            active = db.execute(
-                select(DeploymentRow).where(
-                    DeploymentRow.user_id == user_id,
-                    DeploymentRow.status.in_(_NON_TERMINAL_STATUSES),
+            active = (
+                db.execute(
+                    select(DeploymentRow).where(
+                        DeploymentRow.user_id == user_id,
+                        DeploymentRow.status.in_(_NON_TERMINAL_STATUSES),
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             if len(active) >= _MAX_CONCURRENT_PER_USER:
                 raise DeploymentError(
                     "concurrent_deployment_limit",
@@ -228,21 +232,27 @@ class DeploymentStore:
     def count_active(self, user_id: str) -> int:
         session_factory = get_session_factory()
         with session_factory() as db:
-            return len(db.execute(
-                select(DeploymentRow).where(
-                    DeploymentRow.user_id == user_id,
-                    DeploymentRow.status.in_(_NON_TERMINAL_STATUSES),
+            return len(
+                db.execute(
+                    select(DeploymentRow).where(
+                        DeploymentRow.user_id == user_id,
+                        DeploymentRow.status.in_(_NON_TERMINAL_STATUSES),
+                    )
                 )
-            ).scalars().all())
+                .scalars()
+                .all()
+            )
 
     def list_needing_status_refresh(self) -> list[DeploymentRow]:
         session_factory = get_session_factory()
         with session_factory() as db:
-            rows = list(db.execute(
-                select(DeploymentRow).where(
-                    DeploymentRow.status.in_(("running", "deploying"))
+            rows = list(
+                db.execute(
+                    select(DeploymentRow).where(DeploymentRow.status.in_(("running", "deploying")))
                 )
-            ).scalars().all())
+                .scalars()
+                .all()
+            )
             for row in rows:
                 db.expunge(row)
             return rows
@@ -251,7 +261,9 @@ class DeploymentStore:
         session_factory = get_session_factory()
         with session_factory() as db:
             rows = list(
-                db.execute(select(DeploymentRow).where(DeploymentRow.status == status)).scalars().all()
+                db.execute(select(DeploymentRow).where(DeploymentRow.status == status))
+                .scalars()
+                .all()
             )
             for row in rows:
                 db.expunge(row)

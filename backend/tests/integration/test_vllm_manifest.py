@@ -6,6 +6,7 @@ shape and key fields. This is a structural check — the opt-in dry-run suite
 (T033, in ``tests/dryrun/``) performs the real server-side validation via
 ``dry_run=["All"]`` against a scratch kubeconfig.
 """
+
 from __future__ import annotations
 
 import yaml

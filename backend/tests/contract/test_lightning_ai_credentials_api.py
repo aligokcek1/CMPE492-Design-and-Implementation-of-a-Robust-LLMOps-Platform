@@ -1,4 +1,5 @@
 """Contract tests for GET/POST/DELETE /api/lightning/credentials (T015)."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
@@ -18,6 +19,7 @@ async def _session_auth_headers(client: AsyncClient) -> dict[str, str]:
 # --------------------------------------------------------------------------- #
 # GET /api/lightning/credentials                                               #
 # --------------------------------------------------------------------------- #
+
 
 @pytest.mark.asyncio
 async def test_get_credentials_not_configured(transport):
@@ -41,6 +43,7 @@ async def test_get_credentials_requires_session_401(transport):
 # --------------------------------------------------------------------------- #
 # POST /api/lightning/credentials                                              #
 # --------------------------------------------------------------------------- #
+
 
 @pytest.mark.asyncio
 async def test_save_valid_key_returns_configured_and_valid(transport, fake_lightning_ai_provider):
@@ -111,6 +114,7 @@ async def test_replace_existing_key(transport, fake_lightning_ai_provider):
 # --------------------------------------------------------------------------- #
 # DELETE /api/lightning/credentials                                            #
 # --------------------------------------------------------------------------- #
+
 
 @pytest.mark.asyncio
 async def test_delete_credentials_returns_204(transport, fake_lightning_ai_provider):

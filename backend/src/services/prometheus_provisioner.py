@@ -1,4 +1,5 @@
 """File-based Prometheus scrape job provisioning."""
+
 from __future__ import annotations
 
 import logging

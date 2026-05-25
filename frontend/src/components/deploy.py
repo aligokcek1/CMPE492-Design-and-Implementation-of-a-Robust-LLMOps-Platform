@@ -50,7 +50,9 @@ def render_public_repo_deploy_section() -> None:
                 except APIError as exc:
                     st.session_state.pop("public_repo_info", None)
                     if exc.status_code == 401:
-                        st.session_state["last_auth_error"] = "Session expired. Please sign in again."
+                        st.session_state["last_auth_error"] = (
+                            "Session expired. Please sign in again."
+                        )
                         st.session_state["pending_action"] = {
                             "type": "fetch_public_info",
                             "repo_id": repo_id,
@@ -95,8 +97,10 @@ def render_public_repo_deploy_section() -> None:
 
         deploy_disabled = hardware_type is None
         deploy_label = (
-            "Deploy to GKE (CPU)" if hardware_type == "CPU"
-            else "Deploy to Lightning AI (GPU)" if hardware_type == "GPU"
+            "Deploy to GKE (CPU)"
+            if hardware_type == "CPU"
+            else "Deploy to Lightning AI (GPU)"
+            if hardware_type == "GPU"
             else "Deploy"
         )
         deploy_btn = st.button(
@@ -107,7 +111,9 @@ def render_public_repo_deploy_section() -> None:
             disabled=deploy_disabled,
         )
         if deploy_btn and hardware_type:
-            _handle_real_deploy(session_token, info["repo_id"], hardware_type=hardware_type.lower(), force=False)
+            _handle_real_deploy(
+                session_token, info["repo_id"], hardware_type=hardware_type.lower(), force=False
+            )
 
         dup_pending = st.session_state.get("_duplicate_confirm_for")
         if dup_pending == info["repo_id"] and hardware_type:
@@ -117,10 +123,14 @@ def render_public_repo_deploy_section() -> None:
             )
             col_yes, col_no = st.columns(2)
             with col_yes:
-                if st.button("Yes, deploy another", key="btn_pub_confirm_dup", use_container_width=True):
+                if st.button(
+                    "Yes, deploy another", key="btn_pub_confirm_dup", use_container_width=True
+                ):
                     _handle_real_deploy(
-                        session_token, info["repo_id"],
-                        hardware_type=hardware_type.lower(), force=True,
+                        session_token,
+                        info["repo_id"],
+                        hardware_type=hardware_type.lower(),
+                        force=True,
                     )
             with col_no:
                 if st.button("Cancel", key="btn_pub_cancel_dup", use_container_width=True):
@@ -128,9 +138,13 @@ def render_public_repo_deploy_section() -> None:
                     st.rerun()
 
 
-def _handle_real_deploy(session_token: str, hf_model_id: str, *, hardware_type: str, force: bool) -> None:
+def _handle_real_deploy(
+    session_token: str, hf_model_id: str, *, hardware_type: str, force: bool
+) -> None:
     try:
-        result = create_deployment(session_token, hf_model_id, hardware_type=hardware_type, force=force)
+        result = create_deployment(
+            session_token, hf_model_id, hardware_type=hardware_type, force=force
+        )
         st.session_state.pop("_duplicate_confirm_for", None)
         platform = "GKE (CPU)" if hardware_type == "cpu" else "Lightning AI (GPU)"
         st.success(
@@ -147,7 +161,10 @@ def _handle_real_deploy(session_token: str, hf_model_id: str, *, hardware_type: 
                 "You have reached the maximum of 3 concurrent deployments. "
                 "Delete one first, then try again."
             )
-        elif exc.status_code == 409 and exc.code in ("lightning_credentials_missing", "lightning_credentials_invalid"):
+        elif exc.status_code == 409 and exc.code in (
+            "lightning_credentials_missing",
+            "lightning_credentials_invalid",
+        ):
             st.error(
                 "Lightning AI API key is missing or invalid. "
                 "Add or update it under **Settings → Lightning AI** in the sidebar."

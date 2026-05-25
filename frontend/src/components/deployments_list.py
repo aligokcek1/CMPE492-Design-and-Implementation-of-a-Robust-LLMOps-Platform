@@ -1,4 +1,5 @@
 """Deployments tab: fleet overview, dense rows, and detail disclosures."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -140,9 +141,7 @@ def render_deployments_list() -> None:
 
     st.markdown("#### Deployments")
     if not visible:
-        st.info(
-            "No deployments yet. Open the **Deploy** tab to launch a model from Hugging Face."
-        )
+        st.info("No deployments yet. Open the **Deploy** tab to launch a model from Hugging Face.")
         return
 
     st.caption(

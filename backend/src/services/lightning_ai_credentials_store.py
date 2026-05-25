@@ -5,6 +5,7 @@ at rest and never returned to callers — only validation status is exposed.
 The Lightning AI platform user UUID (lightning_user_id) is stored plaintext
 because it is not secret.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

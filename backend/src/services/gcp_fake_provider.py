@@ -47,7 +47,9 @@ class FakeGCPProvider(GCPProvider):
 
     # ---------- test helpers (not part of the GCPProvider protocol) ----------
     def seed_project(self, project_id: str, billing_account_id: str | None = None) -> None:
-        self._projects[project_id] = _FakeProject(project_id=project_id, billing_account_id=billing_account_id)
+        self._projects[project_id] = _FakeProject(
+            project_id=project_id, billing_account_id=billing_account_id
+        )
 
     def fail_on(self, method: str, error: Exception | type[Exception] | None) -> None:
         """Program the next call to `method` to raise `error`.
@@ -93,11 +95,10 @@ class FakeGCPProvider(GCPProvider):
                 )
 
         if parsed["type"] != "service_account":
-            raise GCPProviderError(
-                f"Expected type='service_account', got type={parsed['type']!r}."
-            )
+            raise GCPProviderError(f"Expected type='service_account', got type={parsed['type']!r}.")
 
         import re
+
         if not re.fullmatch(_VALID_BILLING_ACCOUNT_RE, billing_account_id):
             raise GCPProviderError(
                 "billing_account_id must match pattern billingAccounts/XXXXXX-XXXXXX-XXXXXX."
@@ -120,9 +121,7 @@ class FakeGCPProvider(GCPProvider):
         await self._yield()
 
         if project_id in self._projects:
-            raise GCPProviderError(
-                f"Project {project_id} already exists in the fake provider."
-            )
+            raise GCPProviderError(f"Project {project_id} already exists in the fake provider.")
         self._projects[project_id] = _FakeProject(project_id=project_id)
         return project_id
 
@@ -132,11 +131,13 @@ class FakeGCPProvider(GCPProvider):
         await self._yield()
 
         project = self._require(project_id)
-        project.enabled_services.update({
-            "compute.googleapis.com",
-            "container.googleapis.com",
-            "cloudbilling.googleapis.com",
-        })
+        project.enabled_services.update(
+            {
+                "compute.googleapis.com",
+                "container.googleapis.com",
+                "cloudbilling.googleapis.com",
+            }
+        )
 
     async def attach_billing(self, project_id: str, billing_account_id: str) -> None:
         self._record("attach_billing", project_id=project_id, billing_account_id=billing_account_id)
@@ -152,7 +153,9 @@ class FakeGCPProvider(GCPProvider):
         cluster_name: str,
         region: str,
     ) -> ClusterHandle:
-        self._record("create_gke_cluster", project_id=project_id, cluster_name=cluster_name, region=region)
+        self._record(
+            "create_gke_cluster", project_id=project_id, cluster_name=cluster_name, region=region
+        )
         self._maybe_fail("create_gke_cluster")
         await self._yield()
 
@@ -169,7 +172,9 @@ class FakeGCPProvider(GCPProvider):
         return handle
 
     async def get_kube_config(self, project_id: str, cluster_name: str, region: str) -> str:
-        self._record("get_kube_config", project_id=project_id, cluster_name=cluster_name, region=region)
+        self._record(
+            "get_kube_config", project_id=project_id, cluster_name=cluster_name, region=region
+        )
         self._maybe_fail("get_kube_config")
         await self._yield()
 

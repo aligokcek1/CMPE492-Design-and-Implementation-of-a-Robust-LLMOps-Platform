@@ -1,4 +1,5 @@
 """Shared HTTP mocks for Streamlit AppTest integration tests."""
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -78,9 +79,7 @@ def make_get_side_effect(
         if "/api/gcp/credentials" in url:
             return mock_json_response(gcp if gcp is not None else _UNCONFIGURED_CREDS)
         if "/api/lightning/credentials" in url:
-            return mock_json_response(
-                lightning if lightning is not None else _UNCONFIGURED_CREDS
-            )
+            return mock_json_response(lightning if lightning is not None else _UNCONFIGURED_CREDS)
         if "/api/models/public" in url:
             return mock_json_response({})
         if url.rstrip("/").endswith("/api/models"):

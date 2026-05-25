@@ -127,9 +127,7 @@ def render_upload_section() -> None:
                     f"Session ID: `{result['session_id']}`"
                 )
                 if result.get("deploy_shortcut"):
-                    st.info(
-                        "Model uploaded. Open the **Deploy** tab to deploy it immediately."
-                    )
+                    st.info("Model uploaded. Open the **Deploy** tab to deploy it immediately.")
             except APIError as exc:
                 st.session_state.pop("upload_result", None)
                 if exc.status_code == 401:
@@ -181,7 +179,9 @@ def render_model_selector() -> None:
                 st.session_state["hf_models_cache"] = models
             except APIError as exc:
                 if exc.status_code == 401:
-                    st.session_state["last_auth_error"] = "Session expired while loading your models."
+                    st.session_state["last_auth_error"] = (
+                        "Session expired while loading your models."
+                    )
                     st.session_state["pending_action"] = {"type": "list_models"}
                     st.error("Session expired. Please sign in again.")
                     return
@@ -208,6 +208,4 @@ def render_model_selector() -> None:
         st.session_state["selected_model"] = selected
         st.session_state["shortcut_deploy_model"] = selected
         st.toast(f"Selected model: {selected}")
-        st.success(
-            f"Model **{selected}** selected. Go to the **Deploy** tab to deploy it."
-        )
+        st.success(f"Model **{selected}** selected. Go to the **Deploy** tab to deploy it.")

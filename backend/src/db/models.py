@@ -56,11 +56,17 @@ class GCPCredentialsRow(Base):
     # before the column existed; missing parent → create_project returns a
     # clear 400 at deploy time.
     gcp_parent: Mapped[str | None] = mapped_column(String, nullable=True)
-    last_validated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
+    last_validated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now
+    )
     validation_status: Mapped[str] = mapped_column(String, nullable=False, default="valid")
     validation_error_message: Mapped[str | None] = mapped_column(String, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now, onupdate=_now
+    )
 
 
 class DeploymentRow(Base):
@@ -103,8 +109,12 @@ class DeploymentRow(Base):
     status: Mapped[str] = mapped_column(String, nullable=False, default="queued")
     status_message: Mapped[str | None] = mapped_column(String, nullable=True)
     endpoint_url: Mapped[str | None] = mapped_column(String, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now, onupdate=_now
+    )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
@@ -127,10 +137,16 @@ class DeploymentMonitoringRow(Base):
     grafana_datasource_uid: Mapped[str] = mapped_column(String, nullable=False)
     grafana_dashboard_uid: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False, default="active")
-    provisioned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
+    provisioned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now
+    )
     decommission_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now, onupdate=_now
+    )
 
 
 class LightningAICredentialsRow(Base):
@@ -151,9 +167,15 @@ class LightningAICredentialsRow(Base):
     api_key_encrypted: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     validation_status: Mapped[str] = mapped_column(String, nullable=False, default="valid")
     validation_error_message: Mapped[str | None] = mapped_column(String, nullable=True)
-    last_validated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
+    last_validated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now, onupdate=_now
+    )
 
 
 __all__ = [

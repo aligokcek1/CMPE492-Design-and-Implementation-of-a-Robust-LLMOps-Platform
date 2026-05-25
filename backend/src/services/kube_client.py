@@ -4,6 +4,7 @@ Real GKE apply path; fully isolated from tests by the import-guard. The
 orchestrator's fake provider path synthesises fake LB IPs without touching
 this module — see ``deployment_orchestrator``.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -183,7 +184,11 @@ async def wait_deployment_available(
                     logger.debug("Deployment poll failed: %s", exc)
                     dep_status = None
 
-                if dep_status and dep_status.available_replicas and dep_status.available_replicas >= 1:
+                if (
+                    dep_status
+                    and dep_status.available_replicas
+                    and dep_status.available_replicas >= 1
+                ):
                     if status_callback is not None:
                         try:
                             status_callback("Inference pod is Ready.")
@@ -202,9 +207,7 @@ async def wait_deployment_available(
                     if quota_first_seen_at is None:
                         quota_first_seen_at = time.monotonic()
                     elif time.monotonic() - quota_first_seen_at >= quota_failure_grace_seconds:
-                        raise GpuQuotaExhaustedError(
-                            _format_quota_error(diagnostics)
-                        )
+                        raise GpuQuotaExhaustedError(_format_quota_error(diagnostics))
                 else:
                     quota_first_seen_at = None
 
@@ -239,6 +242,7 @@ async def wait_deployment_available(
 # Diagnostics helpers                                                         #
 # --------------------------------------------------------------------------- #
 
+
 def _collect_pod_diagnostics(
     *,
     core_v1,
@@ -272,24 +276,28 @@ def _collect_pod_diagnostics(
     for pod in pods:
         phase = getattr(pod.status, "phase", None) or "Unknown"
         container_summary: list[str] = []
-        for cs in (pod.status.container_statuses or []):
+        for cs in pod.status.container_statuses or []:
             state = cs.state
             if state and state.waiting:
                 container_summary.append(
-                    f"waiting/{state.waiting.reason or '?'}: {state.waiting.message or ''}".strip(": ")
+                    f"waiting/{state.waiting.reason or '?'}: {state.waiting.message or ''}".strip(
+                        ": "
+                    )
                 )
             elif state and state.running:
                 container_summary.append("running")
             elif state and state.terminated:
                 container_summary.append(
-                    f"terminated/{state.terminated.reason or '?'}: {state.terminated.message or ''}".strip(": ")
+                    f"terminated/{state.terminated.reason or '?'}: {state.terminated.message or ''}".strip(
+                        ": "
+                    )
                 )
         if not container_summary:
             container_summary.append("no container status yet")
 
         crash_loop_container: str | None = None
         max_restart_count = 0
-        for cs in (pod.status.container_statuses or []):
+        for cs in pod.status.container_statuses or []:
             restarts = cs.restart_count or 0
             if restarts > max_restart_count:
                 max_restart_count = restarts
@@ -301,7 +309,9 @@ def _collect_pod_diagnostics(
             "name": pod.metadata.name,
             "phase": phase,
             "containers": container_summary,
-            "restart_count": sum((cs.restart_count or 0) for cs in (pod.status.container_statuses or [])),
+            "restart_count": sum(
+                (cs.restart_count or 0) for cs in (pod.status.container_statuses or [])
+            ),
             "max_restart_count": max_restart_count,
             "crash_loop_container": crash_loop_container,
         }
@@ -317,7 +327,7 @@ def _collect_pod_diagnostics(
 
         # Sort by last_timestamp descending; keep the 5 most recent.
         evts.sort(
-            key=lambda e: (e.last_timestamp or e.event_time or e.metadata.creation_timestamp),
+            key=lambda e: e.last_timestamp or e.event_time or e.metadata.creation_timestamp,
             reverse=True,
         )
         for evt in evts[:5]:
@@ -356,7 +366,9 @@ def _summarize_pod_state(diagnostics: dict[str, Any]) -> str:
         # Look at recent events to be more specific.
         for evt in pod.get("recent_events", []):
             if "FailedScheduling" in evt and "nvidia.com/gpu" in evt:
-                return "Waiting for a compatible node (FailedScheduling: insufficient nvidia.com/gpu)…"
+                return (
+                    "Waiting for a compatible node (FailedScheduling: insufficient nvidia.com/gpu)…"
+                )
             if "TriggeredScaleUp" in evt or "Provisioning" in evt:
                 return "GKE Autopilot is provisioning a node…"
             if "FailedScheduling" in evt:
@@ -365,7 +377,9 @@ def _summarize_pod_state(diagnostics: dict[str, Any]) -> str:
 
     if phase == "Running":
         for state in containers:
-            if state.startswith("waiting/ImagePullBackOff") or state.startswith("waiting/ErrImagePull"):
+            if state.startswith("waiting/ImagePullBackOff") or state.startswith(
+                "waiting/ErrImagePull"
+            ):
                 return f"Image pull failed: {state}"
         if any("running" == c for c in containers):
             return "Inference container is up — loading model…"
@@ -384,15 +398,17 @@ def _format_quota_error(diagnostics: dict[str, Any]) -> str:
     if pods:
         pod = pods[0]
         evt_line = next(
-            (e for e in pod.get("recent_events", []) if "FailedScheduling" in e and "nvidia.com/gpu" in e),
+            (
+                e
+                for e in pod.get("recent_events", [])
+                if "FailedScheduling" in e and "nvidia.com/gpu" in e
+            ),
             "",
         )
         pod_line = f" Pod {pod.get('name')} reports: {evt_line}"
     return (
         "Pod could not be scheduled — your GCP project has no compatible GPU "
-        "quota in this region."
-        + pod_line
-        + " Request a quota increase at "
+        "quota in this region." + pod_line + " Request a quota increase at "
         "https://console.cloud.google.com/iam-admin/quotas — filter by "
         "the relevant GPU metric in the cluster region (for example "
         "'NVIDIA L4 GPUs' in us-central1) "
@@ -500,7 +516,10 @@ def _fetch_container_logs(
         except ApiException as exc:
             logger.debug(
                 "read_namespaced_pod_log(previous=%s) failed for %s/%s: %s",
-                previous_flag, pod_name, container, exc,
+                previous_flag,
+                pod_name,
+                container,
+                exc,
             )
             continue
         except Exception as exc:  # noqa: BLE001
@@ -530,13 +549,12 @@ async def get_service_lb_ip(
             config.load_kube_config(config_file=kubeconfig_path)
             core_v1 = client.CoreV1Api()
             import time
+
             deadline = time.monotonic() + timeout_seconds
             while time.monotonic() < deadline:
                 svc = core_v1.read_namespaced_service(name=service_name, namespace=namespace)
                 ingress = (
-                    svc.status
-                    and svc.status.load_balancer
-                    and svc.status.load_balancer.ingress
+                    svc.status and svc.status.load_balancer and svc.status.load_balancer.ingress
                 )
                 if ingress:
                     ip = ingress[0].ip or ingress[0].hostname

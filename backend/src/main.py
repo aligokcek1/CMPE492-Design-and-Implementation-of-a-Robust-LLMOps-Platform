@@ -122,7 +122,9 @@ app.include_router(deployment.router, prefix="/api/deployment", tags=["deploymen
 app.include_router(deployment.real_router, prefix="/api/deployments", tags=["deployments"])
 app.include_router(metrics.router, prefix="/api", tags=["metrics"])
 app.include_router(gcp_credentials.router, prefix="/api/gcp/credentials", tags=["gcp"])
-app.include_router(lightning_ai_credentials.router, prefix="/api/lightning/credentials", tags=["lightning-ai"])
+app.include_router(
+    lightning_ai_credentials.router, prefix="/api/lightning/credentials", tags=["lightning-ai"]
+)
 app.mount("/metrics", make_asgi_app())
 
 

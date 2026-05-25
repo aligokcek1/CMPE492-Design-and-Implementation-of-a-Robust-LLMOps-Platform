@@ -1,4 +1,5 @@
 """Grafana datasource + dashboard provisioning via HTTP API."""
+
 from __future__ import annotations
 
 import json
@@ -41,9 +42,13 @@ class HttpGrafanaProvisioner:
         admin_password: str | None = None,
         prometheus_url: str | None = None,
     ) -> None:
-        self._base_url = (base_url or os.environ.get("LLMOPS_GRAFANA_URL", "http://localhost:3000")).rstrip("/")
+        self._base_url = (
+            base_url or os.environ.get("LLMOPS_GRAFANA_URL", "http://localhost:3000")
+        ).rstrip("/")
         self._admin_user = admin_user or os.environ.get("LLMOPS_GRAFANA_ADMIN_USER", "admin")
-        self._admin_password = admin_password or os.environ.get("LLMOPS_GRAFANA_ADMIN_PASSWORD", "admin")
+        self._admin_password = admin_password or os.environ.get(
+            "LLMOPS_GRAFANA_ADMIN_PASSWORD", "admin"
+        )
         # URL stored in Grafana datasource config — must be reachable FROM the Grafana
         # container (Docker Compose service name), not from the host.
         self._prometheus_url = prometheus_url or os.environ.get(
@@ -123,7 +128,9 @@ class HttpGrafanaProvisioner:
             except Exception:  # noqa: BLE001
                 logger.debug("Grafana dashboard delete failed for %s", dashboard_uid, exc_info=True)
             try:
-                ds_list = await client.get(f"{self._base_url}/api/datasources/uid/{datasource_uid}", auth=self._auth())
+                ds_list = await client.get(
+                    f"{self._base_url}/api/datasources/uid/{datasource_uid}", auth=self._auth()
+                )
                 if ds_list.status_code == 200:
                     ds_id = ds_list.json().get("id")
                     if ds_id is not None:
@@ -132,7 +139,9 @@ class HttpGrafanaProvisioner:
                             auth=self._auth(),
                         )
             except Exception:  # noqa: BLE001
-                logger.debug("Grafana datasource delete failed for %s", datasource_uid, exc_info=True)
+                logger.debug(
+                    "Grafana datasource delete failed for %s", datasource_uid, exc_info=True
+                )
 
 
 __all__ = ["GrafanaProvisioner", "HttpGrafanaProvisioner"]

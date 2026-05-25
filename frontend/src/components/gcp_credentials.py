@@ -1,4 +1,5 @@
 """Streamlit component for the GCP credentials tab (feature 007 / US1)."""
+
 from __future__ import annotations
 
 import streamlit as st
@@ -25,7 +26,9 @@ def _fetch_status() -> dict | None:
 
 def _render_status_panel(status: dict) -> None:
     if not status.get("configured"):
-        st.info("No GCP credentials configured yet. Save a service-account key + billing account to enable real model deployments.")
+        st.info(
+            "No GCP credentials configured yet. Save a service-account key + billing account to enable real model deployments."
+        )
         return
 
     validation = status.get("validation_status") or "valid"
@@ -46,7 +49,10 @@ def _render_status_panel(status: dict) -> None:
         st.markdown("**SA's home project**")
         st.code(status.get("gcp_project_id_of_sa") or "—", language=None)
         st.markdown("**Deployment parent (Org / Folder)**")
-        st.code(status.get("gcp_parent") or "— (service accounts require one to create projects)", language=None)
+        st.code(
+            status.get("gcp_parent") or "— (service accounts require one to create projects)",
+            language=None,
+        )
     with cols[1]:
         st.markdown("**Billing account**")
         st.code(status.get("billing_account_id") or "—", language=None)
@@ -87,7 +93,9 @@ def _render_save_form() -> None:
             ),
             key="gcp_parent_input",
         )
-        submitted = st.form_submit_button("Save and validate", type="primary", use_container_width=True)
+        submitted = st.form_submit_button(
+            "Save and validate", type="primary", use_container_width=True
+        )
 
     if not submitted:
         return
@@ -105,8 +113,7 @@ def _render_save_form() -> None:
         parent_clean.startswith("organizations/") or parent_clean.startswith("folders/")
     ):
         st.error(
-            "Parent must be formatted as 'organizations/<numeric-id>' "
-            "or 'folders/<numeric-id>'."
+            "Parent must be formatted as 'organizations/<numeric-id>' or 'folders/<numeric-id>'."
         )
         return
 

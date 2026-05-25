@@ -1,4 +1,5 @@
 """Streamlit component for the ⚡ Lightning AI credentials tab."""
+
 from __future__ import annotations
 
 import streamlit as st

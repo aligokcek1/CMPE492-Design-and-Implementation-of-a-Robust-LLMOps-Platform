@@ -7,6 +7,7 @@ Routes to the correct upstream API based on hardware type:
 Both paths present an OpenAI-style ``choices[0].message.content`` response to
 the caller so the UI/API contract stays uniform.
 """
+
 from __future__ import annotations
 
 import time
@@ -44,10 +45,7 @@ async def forward(
     user_id: str | None = None,
 ) -> dict:
     """Forward an OpenAI-style chat payload to the deployed inference endpoint."""
-    labels = (
-        deployment_id is not None
-        and user_id is not None
-    )
+    labels = deployment_id is not None and user_id is not None
     started = time.perf_counter()
     try:
         if hardware_type == "gpu":
@@ -82,6 +80,7 @@ async def forward(
 # ---------------------------------------------------------------------------
 # CPU path — HuggingFace TGI
 # ---------------------------------------------------------------------------
+
 
 async def _forward_tgi(*, endpoint_url: str, body: dict) -> dict:
     url = endpoint_url.rstrip("/") + "/generate"
@@ -123,6 +122,7 @@ async def _forward_tgi(*, endpoint_url: str, body: dict) -> dict:
 # GPU path — vLLM OpenAI-compatible server
 # ---------------------------------------------------------------------------
 
+
 async def _forward_vllm(*, endpoint_url: str, body: dict, model_id: str) -> dict:
     url = endpoint_url.rstrip("/") + "/v1/chat/completions"
 
@@ -161,6 +161,7 @@ async def _forward_vllm(*, endpoint_url: str, body: dict, model_id: str) -> dict
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _messages_to_prompt(messages: list[dict]) -> str:
     if not messages:

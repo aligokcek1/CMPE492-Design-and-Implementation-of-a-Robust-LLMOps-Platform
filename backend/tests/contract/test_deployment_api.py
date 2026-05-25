@@ -110,13 +110,15 @@ async def test_mock_deploy_idempotency_replay(transport):
 import json  # noqa: E402
 import uuid  # noqa: E402
 
-_VALID_SA_JSON = json.dumps({
-    "type": "service_account",
-    "project_id": "sa-parent-project",
-    "private_key_id": "abc",
-    "private_key": "-----BEGIN PRIVATE KEY-----\nFAKE\n-----END PRIVATE KEY-----\n",
-    "client_email": "sa@sa-parent-project.iam.gserviceaccount.com",
-})
+_VALID_SA_JSON = json.dumps(
+    {
+        "type": "service_account",
+        "project_id": "sa-parent-project",
+        "private_key_id": "abc",
+        "private_key": "-----BEGIN PRIVATE KEY-----\nFAKE\n-----END PRIVATE KEY-----\n",
+        "client_email": "sa@sa-parent-project.iam.gserviceaccount.com",
+    }
+)
 _VALID_BILLING = "billingAccounts/ABCDEF-012345-67890X"
 
 
@@ -143,7 +145,11 @@ def supported_hf_model(monkeypatch):
         timeout: int = 10,
     ) -> tuple[bool, str, str]:
         if "unsupported" in model_id.lower():
-            return False, "image-classification", "model pipeline is image-classification, not text generation"
+            return (
+                False,
+                "image-classification",
+                "model pipeline is image-classification, not text generation",
+            )
         return True, "text-generation", "ok"
 
     from src.services import hf_models
@@ -155,6 +161,7 @@ def supported_hf_model(monkeypatch):
 # --------------------------------------------------------------------------- #
 # T028 — POST /api/deployments                                                 #
 # --------------------------------------------------------------------------- #
+
 
 @pytest.mark.asyncio
 async def test_create_deployment_success_202(transport, supported_hf_model):
@@ -209,7 +216,9 @@ async def test_create_deployment_requires_credentials_409(transport, supported_h
 
 
 @pytest.mark.asyncio
-async def test_create_deployment_rejects_when_credentials_invalid_409(transport, supported_hf_model):
+async def test_create_deployment_rejects_when_credentials_invalid_409(
+    transport, supported_hf_model
+):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         headers = await _session_auth_headers(client)
         await _ensure_credentials(client, headers)
@@ -247,18 +256,20 @@ async def test_create_deployment_cap_reached_returns_409(transport, supported_hf
         session_factory = get_session_factory()
         with session_factory() as db:
             for idx in range(3):
-                db.add(DeploymentRow(
-                    id=str(uuid.uuid4()),
-                    user_id="test_user",
-                    hf_model_id=f"some/model-{idx}",
-                    hf_model_display_name=f"Model {idx}",
-                    gcp_project_id=f"llmops-existing{idx}-aaaa{idx}",
-                    gke_cluster_name="llmops-cluster",
-                    gke_region="us-central1",
-                    status="running",
-                    created_at=datetime.now(UTC),
-                    updated_at=datetime.now(UTC),
-                ))
+                db.add(
+                    DeploymentRow(
+                        id=str(uuid.uuid4()),
+                        user_id="test_user",
+                        hf_model_id=f"some/model-{idx}",
+                        hf_model_display_name=f"Model {idx}",
+                        gcp_project_id=f"llmops-existing{idx}-aaaa{idx}",
+                        gke_cluster_name="llmops-cluster",
+                        gke_region="us-central1",
+                        status="running",
+                        created_at=datetime.now(UTC),
+                        updated_at=datetime.now(UTC),
+                    )
+                )
             db.commit()
 
         resp = await client.post(
@@ -272,7 +283,9 @@ async def test_create_deployment_cap_reached_returns_409(transport, supported_hf
 
 
 @pytest.mark.asyncio
-async def test_create_deployment_duplicate_model_requires_confirmation(transport, supported_hf_model):
+async def test_create_deployment_duplicate_model_requires_confirmation(
+    transport, supported_hf_model
+):
     from datetime import UTC, datetime
 
     from src.db import get_session_factory
@@ -284,18 +297,20 @@ async def test_create_deployment_duplicate_model_requires_confirmation(transport
 
         session_factory = get_session_factory()
         with session_factory() as db:
-            db.add(DeploymentRow(
-                id=str(uuid.uuid4()),
-                user_id="test_user",
-                hf_model_id="Qwen/Qwen3-1.7B",
-                hf_model_display_name="Qwen3 1.7B",
-                gcp_project_id="llmops-existing-dup01",
-                gke_cluster_name="llmops-cluster",
-                gke_region="us-central1",
-                status="running",
-                created_at=datetime.now(UTC),
-                updated_at=datetime.now(UTC),
-            ))
+            db.add(
+                DeploymentRow(
+                    id=str(uuid.uuid4()),
+                    user_id="test_user",
+                    hf_model_id="Qwen/Qwen3-1.7B",
+                    hf_model_display_name="Qwen3 1.7B",
+                    gcp_project_id="llmops-existing-dup01",
+                    gke_cluster_name="llmops-cluster",
+                    gke_region="us-central1",
+                    status="running",
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
+                )
+            )
             db.commit()
 
         first = await client.post(
@@ -320,13 +335,16 @@ async def test_create_deployment_duplicate_model_requires_confirmation(transport
 @pytest.mark.asyncio
 async def test_create_deployment_requires_session_401(transport, supported_hf_model):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.post("/api/deployments", json={"hf_model_id": "Qwen/Qwen3-1.7B", "hardware_type": "cpu"})
+        resp = await client.post(
+            "/api/deployments", json={"hf_model_id": "Qwen/Qwen3-1.7B", "hardware_type": "cpu"}
+        )
     assert resp.status_code == 401
 
 
 # --------------------------------------------------------------------------- #
 # T029 — GET /api/deployments/{id}                                             #
 # --------------------------------------------------------------------------- #
+
 
 @pytest.mark.asyncio
 async def test_get_deployment_returns_detail_with_gcp_fields(transport, supported_hf_model):
@@ -364,18 +382,20 @@ async def test_get_deployment_not_owner_returns_404(transport, supported_hf_mode
     foreign_id = str(uuid.uuid4())
     session_factory = get_session_factory()
     with session_factory() as db:
-        db.add(DeploymentRow(
-            id=foreign_id,
-            user_id="someone_else",
-            hf_model_id="Qwen/Qwen3-1.7B",
-            hf_model_display_name="Qwen3 1.7B",
-            gcp_project_id="llmops-foreign-aaaa01",
-            gke_cluster_name="llmops-cluster",
-            gke_region="us-central1",
-            status="running",
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        ))
+        db.add(
+            DeploymentRow(
+                id=foreign_id,
+                user_id="someone_else",
+                hf_model_id="Qwen/Qwen3-1.7B",
+                hf_model_display_name="Qwen3 1.7B",
+                gcp_project_id="llmops-foreign-aaaa01",
+                gke_cluster_name="llmops-cluster",
+                gke_region="us-central1",
+                status="running",
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            )
+        )
         db.commit()
 
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -388,6 +408,7 @@ async def test_get_deployment_not_owner_returns_404(transport, supported_hf_mode
 # --------------------------------------------------------------------------- #
 # T045 / T046 — GET /api/deployments                                           #
 # --------------------------------------------------------------------------- #
+
 
 @pytest.mark.asyncio
 async def test_list_deployments_returns_only_callers_rows(transport, supported_hf_model):
@@ -402,31 +423,35 @@ async def test_list_deployments_returns_only_callers_rows(transport, supported_h
 
     session_factory = get_session_factory()
     with session_factory() as db:
-        db.add(DeploymentRow(
-            id=mine_id,
-            user_id="test_user",
-            hf_model_id="Qwen/Qwen3-1.7B",
-            hf_model_display_name="Qwen3 1.7B",
-            gcp_project_id="llmops-mine-aaaa01",
-            gke_cluster_name="llmops-cluster",
-            gke_region="us-central1",
-            status="running",
-            endpoint_url="http://1.2.3.4:80",
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        ))
-        db.add(DeploymentRow(
-            id=theirs_id,
-            user_id="someone_else",
-            hf_model_id="Qwen/Qwen3-4B",
-            hf_model_display_name="Qwen3 4B",
-            gcp_project_id="llmops-theirs-bbbb02",
-            gke_cluster_name="llmops-cluster",
-            gke_region="us-central1",
-            status="running",
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        ))
+        db.add(
+            DeploymentRow(
+                id=mine_id,
+                user_id="test_user",
+                hf_model_id="Qwen/Qwen3-1.7B",
+                hf_model_display_name="Qwen3 1.7B",
+                gcp_project_id="llmops-mine-aaaa01",
+                gke_cluster_name="llmops-cluster",
+                gke_region="us-central1",
+                status="running",
+                endpoint_url="http://1.2.3.4:80",
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            )
+        )
+        db.add(
+            DeploymentRow(
+                id=theirs_id,
+                user_id="someone_else",
+                hf_model_id="Qwen/Qwen3-4B",
+                hf_model_display_name="Qwen3 4B",
+                gcp_project_id="llmops-theirs-bbbb02",
+                gke_cluster_name="llmops-cluster",
+                gke_region="us-central1",
+                status="running",
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            )
+        )
         db.commit()
 
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -459,6 +484,7 @@ async def test_list_deployments_requires_session_401(transport):
 # T054 — DELETE /api/deployments/{id}                                          #
 # --------------------------------------------------------------------------- #
 
+
 def _seed_row(
     user_id: str,
     status: str = "running",
@@ -474,33 +500,37 @@ def _seed_row(
     session_factory = get_session_factory()
     with session_factory() as db:
         if hardware_type == "cpu":
-            db.add(DeploymentRow(
-                id=dep_id,
-                user_id=user_id,
-                hf_model_id="Qwen/Qwen3-1.7B",
-                hf_model_display_name="Qwen3 1.7B",
-                hardware_type="cpu",
-                gcp_project_id=f"llmops-{dep_id.replace('-', '')[:8]}-{dep_id.replace('-', '')[8:14]}",
-                gke_cluster_name="llmops-cluster",
-                gke_region="us-central1",
-                status=status,
-                endpoint_url="http://1.2.3.4:80" if status == "running" else None,
-                created_at=datetime.now(UTC),
-                updated_at=datetime.now(UTC),
-            ))
+            db.add(
+                DeploymentRow(
+                    id=dep_id,
+                    user_id=user_id,
+                    hf_model_id="Qwen/Qwen3-1.7B",
+                    hf_model_display_name="Qwen3 1.7B",
+                    hardware_type="cpu",
+                    gcp_project_id=f"llmops-{dep_id.replace('-', '')[:8]}-{dep_id.replace('-', '')[8:14]}",
+                    gke_cluster_name="llmops-cluster",
+                    gke_region="us-central1",
+                    status=status,
+                    endpoint_url="http://1.2.3.4:80" if status == "running" else None,
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
+                )
+            )
         else:
-            db.add(DeploymentRow(
-                id=dep_id,
-                user_id=user_id,
-                hf_model_id="Qwen/Qwen3-1.7B",
-                hf_model_display_name="Qwen3 1.7B",
-                hardware_type="gpu",
-                lightning_ai_deployment_id=f"lai-{dep_id[:8]}",
-                status=status,
-                endpoint_url="http://1.2.3.4:80" if status == "running" else None,
-                created_at=datetime.now(UTC),
-                updated_at=datetime.now(UTC),
-            ))
+            db.add(
+                DeploymentRow(
+                    id=dep_id,
+                    user_id=user_id,
+                    hf_model_id="Qwen/Qwen3-1.7B",
+                    hf_model_display_name="Qwen3 1.7B",
+                    hardware_type="gpu",
+                    lightning_ai_deployment_id=f"lai-{dep_id[:8]}",
+                    status=status,
+                    endpoint_url="http://1.2.3.4:80" if status == "running" else None,
+                    created_at=datetime.now(UTC),
+                    updated_at=datetime.now(UTC),
+                )
+            )
         db.commit()
     return dep_id
 
@@ -569,6 +599,7 @@ async def test_delete_deployment_blocked_when_credentials_invalid_409(transport)
 # T055 — POST /api/deployments/{id}/dismiss                                    #
 # --------------------------------------------------------------------------- #
 
+
 @pytest.mark.asyncio
 async def test_dismiss_lost_deployment_returns_204(transport):
     dep_id = _seed_row("test_user", status="lost")
@@ -613,6 +644,7 @@ async def test_dismiss_not_owner_returns_404(transport):
 # T067 — POST /api/deployments/{id}/inference                                  #
 # --------------------------------------------------------------------------- #
 
+
 @pytest.mark.asyncio
 async def test_inference_happy_path_200(transport):
     from datetime import UTC, datetime
@@ -623,29 +655,33 @@ async def test_inference_happy_path_200(transport):
     dep_id = str(uuid.uuid4())
     session_factory = get_session_factory()
     with session_factory() as db:
-        db.add(DeploymentRow(
-            id=dep_id,
-            user_id="test_user",
-            hf_model_id="Qwen/Qwen3-1.7B",
-            hf_model_display_name="Qwen3 1.7B",
-            gcp_project_id=f"llmops-{dep_id.replace('-', '')[:8]}-{dep_id.replace('-', '')[8:14]}",
-            gke_cluster_name="llmops-cluster",
-            gke_region="us-central1",
-            status="running",
-            endpoint_url="http://192.0.2.42:80",
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        ))
+        db.add(
+            DeploymentRow(
+                id=dep_id,
+                user_id="test_user",
+                hf_model_id="Qwen/Qwen3-1.7B",
+                hf_model_display_name="Qwen3 1.7B",
+                gcp_project_id=f"llmops-{dep_id.replace('-', '')[:8]}-{dep_id.replace('-', '')[8:14]}",
+                gke_cluster_name="llmops-cluster",
+                gke_region="us-central1",
+                status="running",
+                endpoint_url="http://192.0.2.42:80",
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            )
+        )
         db.commit()
 
     canned_response = {
         "id": "chatcmpl-test",
         "object": "chat.completion",
-        "choices": [{
-            "message": {"role": "assistant", "content": "Hello!"},
-            "index": 0,
-            "finish_reason": "stop",
-        }],
+        "choices": [
+            {
+                "message": {"role": "assistant", "content": "Hello!"},
+                "index": 0,
+                "finish_reason": "stop",
+            }
+        ],
     }
 
     with patch("src.services.inference_proxy.forward", new_callable=AsyncMock) as mock_forward:
@@ -716,19 +752,21 @@ async def test_inference_upstream_timeout_returns_504(transport):
     dep_id = str(uuid.uuid4())
     session_factory = get_session_factory()
     with session_factory() as db:
-        db.add(DeploymentRow(
-            id=dep_id,
-            user_id="test_user",
-            hf_model_id="Qwen/Qwen3-1.7B",
-            hf_model_display_name="Qwen3 1.7B",
-            gcp_project_id=f"llmops-{dep_id.replace('-', '')[:8]}-{dep_id.replace('-', '')[8:14]}",
-            gke_cluster_name="llmops-cluster",
-            gke_region="us-central1",
-            status="running",
-            endpoint_url="http://192.0.2.42:80",
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        ))
+        db.add(
+            DeploymentRow(
+                id=dep_id,
+                user_id="test_user",
+                hf_model_id="Qwen/Qwen3-1.7B",
+                hf_model_display_name="Qwen3 1.7B",
+                gcp_project_id=f"llmops-{dep_id.replace('-', '')[:8]}-{dep_id.replace('-', '')[8:14]}",
+                gke_cluster_name="llmops-cluster",
+                gke_region="us-central1",
+                status="running",
+                endpoint_url="http://192.0.2.42:80",
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            )
+        )
         db.commit()
 
     with patch("src.services.inference_proxy.forward", new_callable=AsyncMock) as mock_forward:
@@ -763,6 +801,7 @@ async def test_inference_not_owner_returns_404(transport):
 # =========================================================================== #
 # T007 — hardware_type field validation on POST /api/deployments               #
 # =========================================================================== #
+
 
 @pytest.mark.asyncio
 async def test_create_deployment_without_hardware_type_returns_422(transport, supported_hf_model):
@@ -800,19 +839,21 @@ async def test_list_deployments_includes_hardware_type_field(transport, supporte
     dep_id = str(uuid.uuid4())
     session_factory = get_session_factory()
     with session_factory() as db:
-        db.add(DeploymentRow(
-            id=dep_id,
-            user_id="test_user",
-            hf_model_id="Qwen/Qwen3-1.7B",
-            hf_model_display_name="Qwen3 1.7B",
-            hardware_type="cpu",
-            gcp_project_id=f"llmops-{dep_id.replace('-', '')[:8]}-{dep_id.replace('-', '')[8:14]}",
-            gke_cluster_name="llmops-cluster",
-            gke_region="us-central1",
-            status="running",
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        ))
+        db.add(
+            DeploymentRow(
+                id=dep_id,
+                user_id="test_user",
+                hf_model_id="Qwen/Qwen3-1.7B",
+                hf_model_display_name="Qwen3 1.7B",
+                hardware_type="cpu",
+                gcp_project_id=f"llmops-{dep_id.replace('-', '')[:8]}-{dep_id.replace('-', '')[8:14]}",
+                gke_cluster_name="llmops-cluster",
+                gke_region="us-central1",
+                status="running",
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            )
+        )
         db.commit()
 
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -831,6 +872,7 @@ async def test_list_deployments_includes_hardware_type_field(transport, supporte
 # T016 — GPU deployment contract tests                                          #
 # =========================================================================== #
 
+
 @pytest.mark.asyncio
 async def test_gpu_deploy_missing_lightning_key_returns_409(transport, supported_hf_model):
     """GPU deploy without a Lightning AI key → 409 lightning_credentials_missing."""
@@ -846,7 +888,9 @@ async def test_gpu_deploy_missing_lightning_key_returns_409(transport, supported
 
 
 @pytest.mark.asyncio
-async def test_gpu_deploy_invalid_lightning_key_returns_409(transport, supported_hf_model, fake_lightning_ai_provider):
+async def test_gpu_deploy_invalid_lightning_key_returns_409(
+    transport, supported_hf_model, fake_lightning_ai_provider
+):
     """GPU deploy with an invalid Lightning AI key → 409 lightning_credentials_invalid."""
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         headers = await _session_auth_headers(client)
@@ -857,6 +901,7 @@ async def test_gpu_deploy_invalid_lightning_key_returns_409(transport, supported
             json={"lightning_user_id": "fake-lai-uid-123", "api_key": "lai-validkey"},
         )
         from src.services.lightning_ai_credentials_store import lightning_ai_credentials_store
+
         await lightning_ai_credentials_store.record_key_invalid(
             user_id="test_user",
             error=RuntimeError("simulated revoke"),
@@ -932,6 +977,7 @@ async def test_gpu_inference_proxy_uses_endpoint_url(transport):
 # 009 — model_origin, HF_TOKEN injection, new error codes (T007–T011, T034–T038) #
 # =========================================================================== #
 
+
 @pytest.fixture
 def supported_hf_model_authenticated(monkeypatch):
     """Like supported_hf_model but accepts the new hf_token and timeout params."""
@@ -1005,9 +1051,7 @@ async def test_deploy_third_party_model_sets_model_origin_public(
 
 # T009 — HF Hub unreachable returns 400 hf_hub_unreachable
 @pytest.mark.asyncio
-async def test_deploy_hf_hub_unreachable_returns_400(
-    transport, supported_hf_model_authenticated
-):
+async def test_deploy_hf_hub_unreachable_returns_400(transport, supported_hf_model_authenticated):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         headers = await _session_auth_headers(client)
         await _ensure_credentials(client, headers)
@@ -1027,9 +1071,7 @@ async def test_deploy_hf_hub_unreachable_returns_400(
 
 # T010 — token lacks access returns 400 model_access_denied
 @pytest.mark.asyncio
-async def test_deploy_model_access_denied_returns_400(
-    transport, supported_hf_model_authenticated
-):
+async def test_deploy_model_access_denied_returns_400(transport, supported_hf_model_authenticated):
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         headers = await _session_auth_headers(client)
         await _ensure_credentials(client, headers)
@@ -1055,20 +1097,22 @@ async def test_list_deployments_each_item_has_model_origin(transport):
     dep_id = str(uuid.uuid4())
     session_factory = get_session_factory()
     with session_factory() as db:
-        db.add(DeploymentRow(
-            id=dep_id,
-            user_id="test_user",
-            hf_model_id="test_user/my-model",
-            hf_model_display_name="My Model",
-            hardware_type="cpu",
-            model_origin="uploaded",
-            gcp_project_id=f"llmops-{dep_id.replace('-', '')[:8]}-{dep_id.replace('-', '')[8:14]}",
-            gke_cluster_name="llmops-cluster",
-            gke_region="us-central1",
-            status="running",
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        ))
+        db.add(
+            DeploymentRow(
+                id=dep_id,
+                user_id="test_user",
+                hf_model_id="test_user/my-model",
+                hf_model_display_name="My Model",
+                hardware_type="cpu",
+                model_origin="uploaded",
+                gcp_project_id=f"llmops-{dep_id.replace('-', '')[:8]}-{dep_id.replace('-', '')[8:14]}",
+                gke_cluster_name="llmops-cluster",
+                gke_region="us-central1",
+                status="running",
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            )
+        )
         db.commit()
 
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -1098,8 +1142,10 @@ async def test_deploy_user_owned_model_with_unknown_pipeline_tag_allowed(transpo
         headers = await _session_auth_headers(client)
         await _ensure_credentials(client, headers)
 
-        with _patch.object(_hf, "is_supported_text_generation_model", _unknown_gate), \
-             _patch.object(_hf, "get_display_name", return_value="My Model"):
+        with (
+            _patch.object(_hf, "is_supported_text_generation_model", _unknown_gate),
+            _patch.object(_hf, "get_display_name", return_value="My Model"),
+        ):
             resp = await client.post(
                 "/api/deployments",
                 headers=headers,
@@ -1203,7 +1249,9 @@ async def test_gpu_deploy_public_model_injects_hf_token_to_provider(
 
     original_deploy = fake_lightning_ai_provider.deploy
 
-    async def _spy_deploy(*, hf_model_id: str, api_key: str, lightning_user_id: str = "", hf_token: str = "") -> tuple[str, str | None]:
+    async def _spy_deploy(
+        *, hf_model_id: str, api_key: str, lightning_user_id: str = "", hf_token: str = ""
+    ) -> tuple[str, str | None]:
         received_tokens.append(hf_token)
         return await original_deploy(
             hf_model_id=hf_model_id,
@@ -1241,7 +1289,9 @@ async def test_deploy_hf_hub_slow_times_out_with_hf_hub_unreachable(transport):
     """When is_supported_text_generation_model returns 'unreachable', API returns 400 hf_hub_unreachable."""
     import asyncio
 
-    async def _slow_gate(model_id: str, *, hf_token: str | None = None, timeout: int = 10) -> tuple[bool, str, str]:
+    async def _slow_gate(
+        model_id: str, *, hf_token: str | None = None, timeout: int = 10
+    ) -> tuple[bool, str, str]:
         await asyncio.sleep(0)  # yield; real impl uses HfApi(timeout=timeout)
         return False, "unreachable", "HuggingFace Hub is currently unreachable, please retry."
 
@@ -1289,6 +1339,7 @@ async def test_deployment_status_message_human_readable_on_token_revoked(
     assert resp.status_code == 202
 
     import asyncio
+
     await asyncio.sleep(0.1)
 
     from src.services.deployment_store import deployment_store
@@ -1307,7 +1358,9 @@ async def test_deployment_status_message_human_readable_on_token_revoked(
 
 
 @pytest.mark.asyncio
-async def test_mixed_hardware_concurrent_limit_409(transport, supported_hf_model, fake_lightning_ai_provider):
+async def test_mixed_hardware_concurrent_limit_409(
+    transport, supported_hf_model, fake_lightning_ai_provider
+):
     """3-deployment cap applies combined across CPU and GPU (FR-019)."""
     from datetime import UTC, datetime
 
@@ -1327,30 +1380,34 @@ async def test_mixed_hardware_concurrent_limit_409(transport, supported_hf_model
         with session_factory() as db:
             # Seed 2 CPU + 1 GPU = 3 active deployments
             for idx in range(2):
-                db.add(DeploymentRow(
+                db.add(
+                    DeploymentRow(
+                        id=str(uuid.uuid4()),
+                        user_id="test_user",
+                        hf_model_id=f"some/cpu-model-{idx}",
+                        hf_model_display_name=f"CPU Model {idx}",
+                        hardware_type="cpu",
+                        gcp_project_id=f"llmops-mixed{idx}xxxxx-aaa{idx}",
+                        gke_cluster_name="llmops-cluster",
+                        gke_region="us-central1",
+                        status="running",
+                        created_at=datetime.now(UTC),
+                        updated_at=datetime.now(UTC),
+                    )
+                )
+            db.add(
+                DeploymentRow(
                     id=str(uuid.uuid4()),
                     user_id="test_user",
-                    hf_model_id=f"some/cpu-model-{idx}",
-                    hf_model_display_name=f"CPU Model {idx}",
-                    hardware_type="cpu",
-                    gcp_project_id=f"llmops-mixed{idx}xxxxx-aaa{idx}",
-                    gke_cluster_name="llmops-cluster",
-                    gke_region="us-central1",
+                    hf_model_id="some/gpu-model",
+                    hf_model_display_name="GPU Model",
+                    hardware_type="gpu",
+                    lightning_ai_deployment_id="lai-existing",
                     status="running",
                     created_at=datetime.now(UTC),
                     updated_at=datetime.now(UTC),
-                ))
-            db.add(DeploymentRow(
-                id=str(uuid.uuid4()),
-                user_id="test_user",
-                hf_model_id="some/gpu-model",
-                hf_model_display_name="GPU Model",
-                hardware_type="gpu",
-                lightning_ai_deployment_id="lai-existing",
-                status="running",
-                created_at=datetime.now(UTC),
-                updated_at=datetime.now(UTC),
-            ))
+                )
+            )
             db.commit()
 
         # 4th attempt — either hardware_type should fail
