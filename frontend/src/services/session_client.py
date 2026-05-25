@@ -1,7 +1,6 @@
 import streamlit as st
 import streamlit.components.v1 as components
 
-
 SESSION_TOKEN_KEY = "session_token"
 SESSION_USER_KEY = "hf_username"
 SESSION_EXPIRES_AT_KEY = "session_expires_at"

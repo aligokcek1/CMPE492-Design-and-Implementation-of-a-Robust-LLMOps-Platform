@@ -7,7 +7,12 @@ import streamlit as st
 
 from src.components.deployment_details import render_deployment_details
 from src.components.fleet_overview import render_fleet_overview
-from src.services.api_client import APIError, delete_deployment, dismiss_deployment, list_deployments
+from src.services.api_client import (
+    APIError,
+    delete_deployment,
+    dismiss_deployment,
+    list_deployments,
+)
 from src.services.session_client import get_session_token
 from src.ui.fleet_counts import compute_fleet_counts, filter_visible_deployments
 from src.ui.status_display import render_status_badge
