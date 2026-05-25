@@ -193,6 +193,13 @@ class DeploymentOrchestrator:
 
             set_status("running", "CPU inference server is ready.", endpoint_url=endpoint_url)
             logger.info("Deployment %s reached RUNNING at %s", deployment_id, endpoint_url)
+            from .vllm_manifest import _safe_name
+
+            deployment_store.store_k8s_workload(
+                deployment_id=deployment_id,
+                k8s_namespace="default",
+                k8s_pod_label=_safe_name(row.hf_model_id),
+            )
             _schedule_monitoring_provision(deployment_id)
         except asyncio.CancelledError:
             logger.info("Deployment %s was cancelled by user-initiated deletion.", deployment_id)
@@ -248,7 +255,7 @@ class DeploymentOrchestrator:
 
         try:
             hf_token = _hf_token_for_user(row.user_id)
-            lightning_ai_deployment_id, endpoint_url = await provider.deploy(
+            lightning_ai_deployment_id, endpoint_url, teamspace_id, deployment_uuid = await provider.deploy(
                 hf_model_id=row.hf_model_id,
                 api_key=creds.api_key,
                 lightning_user_id=creds.lightning_user_id,
@@ -258,6 +265,8 @@ class DeploymentOrchestrator:
             deployment_store.store_lightning_deployment_id(
                 deployment_id=deployment_id,
                 lightning_ai_deployment_id=lightning_ai_deployment_id,
+                lightning_teamspace_id=teamspace_id,
+                lightning_deployment_uuid=deployment_uuid,
             )
 
             if endpoint_url:

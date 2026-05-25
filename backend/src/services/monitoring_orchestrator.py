@@ -1,6 +1,7 @@
 """Provision and decommission per-deployment monitoring resources."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from datetime import UTC, datetime, timedelta
@@ -8,6 +9,7 @@ from datetime import UTC, datetime, timedelta
 from ..db.models import DeploymentRow
 from .deployment_store import deployment_store
 from .grafana_provisioner import GrafanaProvisioner, HttpGrafanaProvisioner
+from .hardware_metrics_collector import hardware_metrics_collector
 from .metrics_store import metrics_store
 from .prometheus_provisioner import FilePrometheusProvisioner, PrometheusProvisioner
 
@@ -57,6 +59,7 @@ class MonitoringOrchestrator:
                 grafana_dashboard_uid=dash_uid,
             )
             logger.info("Monitoring provisioned for deployment %s", row.id)
+            asyncio.create_task(hardware_metrics_collector.poll_running_deployments())
         except Exception:  # noqa: BLE001
             logger.exception("Failed to provision monitoring for deployment %s", row.id)
 

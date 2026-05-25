@@ -201,6 +201,36 @@ async def test_metrics_cpu_hardware_available_gpu_na(transport):
 
 
 @pytest.mark.asyncio
+async def test_metrics_cpu_hardware_returns_percent_scale(transport):
+    dep_id = _seed_deployment("test_user", hardware_type="cpu")
+    _seed_monitoring(dep_id)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await _session_auth_headers(client)
+        resp = await client.get(f"/api/deployments/{dep_id}/metrics", headers=headers)
+    hw = resp.json()["series"]["hardware"]
+    assert hw["cpu_utilization"]["unit"] == "percent"
+    assert hw["cpu_utilization"]["label"] == "CPU utilization (pod)"
+    assert hw["memory_utilization"]["label"] == "Memory utilization (pod RAM)"
+    assert hw["cpu_utilization"]["series"][0]["value"] == pytest.approx(50.0)
+
+
+@pytest.mark.asyncio
+async def test_metrics_gpu_hardware_available_when_series_present(transport, fake_metrics_query_client):
+    dep_id = _seed_deployment("test_user", hardware_type="gpu")
+    _seed_monitoring(dep_id)
+    fake_metrics_query_client.gpu_series_available = True
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await _session_auth_headers(client)
+        resp = await client.get(f"/api/deployments/{dep_id}/metrics", headers=headers)
+    hw = resp.json()["series"]["hardware"]
+    assert hw["cpu_utilization"]["available"] is True
+    assert hw["cpu_utilization"]["label"] == "CPU utilization (host)"
+    gpu = hw["gpu_utilization"]
+    assert gpu["available"] is True
+    assert gpu["reason"] is None
+
+
+@pytest.mark.asyncio
 async def test_metrics_gpu_without_gpu_series_returns_na(transport):
     dep_id = _seed_deployment("test_user", hardware_type="gpu")
     _seed_monitoring(dep_id)
@@ -208,9 +238,11 @@ async def test_metrics_gpu_without_gpu_series_returns_na(transport):
         headers = await _session_auth_headers(client)
         resp = await client.get(f"/api/deployments/{dep_id}/metrics", headers=headers)
     data = resp.json()
-    gpu = data["series"]["hardware"]["gpu_utilization"]
+    hw = data["series"]["hardware"]
+    assert hw["cpu_utilization"]["available"] is True
+    gpu = hw["gpu_utilization"]
     assert gpu["available"] is False
-    assert gpu["reason"] == "not_available_for_this_deployment_type"
+    assert gpu["reason"] == "no_data"
     assert data["summary"]["ttft_avg_seconds"] is not None
 
 

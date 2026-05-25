@@ -26,6 +26,7 @@ _RANGE_SECONDS = {
 }
 
 _GPU_NA_REASON = "not_available_for_this_deployment_type"
+_HARDWARE_PERCENT_SCALE = 100.0
 
 
 class MetricsQueryClient(Protocol):
@@ -104,17 +105,21 @@ class FakeMetricsQueryClient:
                 "status": "success",
                 "data": {"resultType": "vector", "result": [{"value": [0, "2"]}]},
             }
-        if "process_cpu_seconds_total" in promql:
+        if "process_cpu_seconds_total" in promql or "llmops_hardware_cpu_utilization" in promql:
             return {
                 "status": "success",
                 "data": {"resultType": "vector", "result": [{"value": [0, "0.42"]}]},
             }
-        if "process_resident_memory_bytes" in promql:
+        if (
+            "process_resident_memory_bytes" in promql
+            or "llmops_hardware_memory_bytes" in promql
+            or "llmops_hardware_memory_utilization" in promql
+        ):
             return {
                 "status": "success",
-                "data": {"resultType": "vector", "result": [{"value": [0, "536870912"]}]},
+                "data": {"resultType": "vector", "result": [{"value": [0, "0.52"]}]},
             }
-        if "gpu_utilization" in promql:
+        if "gpu_utilization" in promql or "llmops_hardware_gpu_utilization" in promql:
             if self.gpu_series_available:
                 return {
                     "status": "success",
@@ -165,7 +170,7 @@ def _scalar_from_vector(data: dict) -> float | None:
         return None
 
 
-def _series_from_matrix(data: dict) -> list[MetricPoint]:
+def _series_from_matrix(data: dict, *, scale: float = 1.0) -> list[MetricPoint]:
     results = data.get("data", {}).get("result", [])
     if not results:
         return []
@@ -176,12 +181,16 @@ def _series_from_matrix(data: dict) -> list[MetricPoint]:
             points.append(
                 MetricPoint(
                     timestamp=datetime.fromtimestamp(float(ts), tz=UTC),
-                    value=float(val),
+                    value=float(val) * scale,
                 )
             )
         except (TypeError, ValueError):
             continue
     return points
+
+
+def _hardware_percent_series(data: dict) -> list[MetricPoint]:
+    return _series_from_matrix(data, scale=_HARDWARE_PERCENT_SCALE)
 
 
 class MetricsQueryService:
@@ -232,26 +241,28 @@ class MetricsQueryService:
             )
 
             cpu_data = await self._client.query(
-                f"rate(process_cpu_seconds_total{labels}[5m])"
+                f"llmops_hardware_cpu_utilization{labels}"
             )
             mem_data = await self._client.query(
-                f"process_resident_memory_bytes{labels}"
+                f"llmops_hardware_memory_utilization{labels}"
             )
-            gpu_data = await self._client.query(f"gpu_utilization{labels}")
+            gpu_data = await self._client.query(
+                f"llmops_hardware_gpu_utilization{labels}"
+            )
             cpu_series_data = await self._client.query_range(
-                f"rate(process_cpu_seconds_total{labels}[5m])",
+                f"llmops_hardware_cpu_utilization{labels}",
                 start=start,
                 end=end,
                 step=step,
             )
             mem_series_data = await self._client.query_range(
-                f"process_resident_memory_bytes{labels}",
+                f"llmops_hardware_memory_utilization{labels}",
                 start=start,
                 end=end,
                 step=step,
             )
             gpu_series_data = await self._client.query_range(
-                f"gpu_utilization{labels}",
+                f"llmops_hardware_gpu_utilization{labels}",
                 start=start,
                 end=end,
                 step=step,
@@ -291,25 +302,34 @@ class MetricsQueryService:
         mem_scalar = _scalar_from_vector(mem_data)
         gpu_scalar = _scalar_from_vector(gpu_data)
 
-        cpu_available = hardware_type == "cpu" and cpu_scalar is not None
+        cpu_available = cpu_scalar is not None
         mem_available = mem_scalar is not None
         gpu_available = hardware_type == "gpu" and gpu_scalar is not None
+
+        memory_label = "pod RAM" if hardware_type == "cpu" else "GPU VRAM"
+        cpu_label = "CPU utilization (pod)" if hardware_type == "cpu" else "CPU utilization (host)"
 
         hardware = {
             "cpu_utilization": HardwareSeries(
                 available=cpu_available,
-                reason=None if cpu_available else _GPU_NA_REASON if hardware_type == "gpu" else "no_data",
-                series=_series_from_matrix(cpu_series_data) if cpu_available else [],
+                reason=None if cpu_available else "no_data",
+                unit="percent",
+                label=cpu_label,
+                series=_hardware_percent_series(cpu_series_data) if cpu_available else [],
             ),
             "memory_utilization": HardwareSeries(
                 available=mem_available,
                 reason=None if mem_available else "no_data",
-                series=_series_from_matrix(mem_series_data) if mem_available else [],
+                unit="percent",
+                label=f"Memory utilization ({memory_label})",
+                series=_hardware_percent_series(mem_series_data) if mem_available else [],
             ),
             "gpu_utilization": HardwareSeries(
                 available=gpu_available,
-                reason=None if gpu_available else _GPU_NA_REASON,
-                series=_series_from_matrix(gpu_series_data) if gpu_available else [],
+                reason=None if gpu_available else ("no_data" if hardware_type == "gpu" else _GPU_NA_REASON),
+                unit="percent",
+                label="GPU utilization",
+                series=_hardware_percent_series(gpu_series_data) if gpu_available else [],
             ),
         }
 

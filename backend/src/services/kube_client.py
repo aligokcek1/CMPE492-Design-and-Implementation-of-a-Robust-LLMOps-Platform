@@ -593,9 +593,57 @@ async def delete_manifest_objects(kubeconfig_yaml: str, manifest_yaml: str) -> N
     await loop.run_in_executor(None, _delete)
 
 
+async def get_pod_resource_usage(
+    kubeconfig_yaml: str,
+    *,
+    namespace: str,
+    pod_label: str,
+) -> tuple[float, int] | None:
+    """Return (cpu_cores, memory_bytes) for the first pod matching *pod_label*."""
+    loop = asyncio.get_event_loop()
+
+    def _read() -> tuple[float, int] | None:
+        from kubernetes import client, config
+        from kubernetes.utils.quantity import parse_quantity
+
+        with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as tmp:
+            tmp.write(kubeconfig_yaml)
+            kubeconfig_path = tmp.name
+
+        try:
+            config.load_kube_config(config_file=kubeconfig_path)
+            metrics_api = client.CustomObjectsApi()
+            result = metrics_api.list_namespaced_custom_object(
+                group="metrics.k8s.io",
+                version="v1beta1",
+                namespace=namespace,
+                plural="pods",
+                label_selector=f"app.kubernetes.io/name={pod_label}",
+            )
+            items = result.get("items") or []
+            if not items:
+                return None
+            containers = items[0].get("containers") or []
+            if not containers:
+                return None
+            usage = containers[0].get("usage") or {}
+            cpu_raw = usage.get("cpu")
+            mem_raw = usage.get("memory")
+            if cpu_raw is None or mem_raw is None:
+                return None
+            cpu_cores = float(parse_quantity(cpu_raw))
+            memory_bytes = int(parse_quantity(mem_raw))
+            return cpu_cores, memory_bytes
+        finally:
+            Path(kubeconfig_path).unlink(missing_ok=True)
+
+    return await loop.run_in_executor(None, _read)
+
+
 __all__ = [
     "apply_objects",
     "wait_deployment_available",
     "get_service_lb_ip",
     "delete_manifest_objects",
+    "get_pod_resource_usage",
 ]

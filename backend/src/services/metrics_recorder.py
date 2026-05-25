@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 
-from prometheus_client import Counter, Histogram
+from prometheus_client import Counter, Gauge, Histogram
 
 
 def _metrics_disabled() -> bool:
@@ -30,6 +30,24 @@ INFERENCE_REQUESTS_TOTAL = Counter(
     "llmops_inference_requests_total",
     "Inference request outcomes",
     _OUTCOME_LABELS,
+)
+
+HARDWARE_CPU_UTILIZATION = Gauge(
+    "llmops_hardware_cpu_utilization",
+    "CPU utilization ratio (0-1): pod/limit on CPU deployments, host CPU on GPU",
+    _LABELS,
+)
+
+HARDWARE_MEMORY_UTILIZATION = Gauge(
+    "llmops_hardware_memory_utilization",
+    "Memory utilization ratio (0-1): pod RAM/limit on CPU, GPU VRAM/total on GPU",
+    _LABELS,
+)
+
+HARDWARE_GPU_UTILIZATION = Gauge(
+    "llmops_hardware_gpu_utilization",
+    "GPU utilization ratio (0-1)",
+    _LABELS,
 )
 
 
@@ -69,6 +87,30 @@ def record_success(
     )
 
 
+def record_hardware_metrics(
+    *,
+    deployment_id: str,
+    user_id: str,
+    hardware_type: str,
+    cpu_utilization: float | None = None,
+    memory_utilization: float | None = None,
+    gpu_utilization: float | None = None,
+) -> None:
+    if _metrics_disabled():
+        return
+    labels = {
+        "deployment_id": deployment_id,
+        "user_id": user_id,
+        "hardware_type": hardware_type,
+    }
+    if cpu_utilization is not None:
+        HARDWARE_CPU_UTILIZATION.labels(**labels).set(cpu_utilization)
+    if memory_utilization is not None:
+        HARDWARE_MEMORY_UTILIZATION.labels(**labels).set(memory_utilization)
+    if gpu_utilization is not None:
+        HARDWARE_GPU_UTILIZATION.labels(**labels).set(gpu_utilization)
+
+
 def record_outcome(
     *,
     deployment_id: str,
@@ -90,6 +132,10 @@ __all__ = [
     "TTFT_SECONDS",
     "TOKENS_TOTAL",
     "INFERENCE_REQUESTS_TOTAL",
+    "HARDWARE_CPU_UTILIZATION",
+    "HARDWARE_MEMORY_UTILIZATION",
+    "HARDWARE_GPU_UTILIZATION",
     "record_success",
+    "record_hardware_metrics",
     "record_outcome",
 ]

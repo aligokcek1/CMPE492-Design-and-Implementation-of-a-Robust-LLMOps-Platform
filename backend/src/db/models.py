@@ -92,8 +92,13 @@ class DeploymentRow(Base):
     gcp_project_id: Mapped[str | None] = mapped_column(String, nullable=True, unique=True)
     gke_cluster_name: Mapped[str | None] = mapped_column(String, nullable=True)
     gke_region: Mapped[str | None] = mapped_column(String, nullable=True)
-    # Lightning AI field — null for CPU rows.
+    # Lightning AI fields — null for CPU rows.
     lightning_ai_deployment_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    lightning_teamspace_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    lightning_deployment_uuid: Mapped[str | None] = mapped_column(String, nullable=True)
+    # GKE workload identity for Metrics API polling — null for GPU rows.
+    k8s_namespace: Mapped[str | None] = mapped_column(String, nullable=True)
+    k8s_pod_label: Mapped[str | None] = mapped_column(String, nullable=True)
     model_origin: Mapped[str] = mapped_column(String, nullable=False, default="public")
     status: Mapped[str] = mapped_column(String, nullable=False, default="queued")
     status_message: Mapped[str | None] = mapped_column(String, nullable=True)

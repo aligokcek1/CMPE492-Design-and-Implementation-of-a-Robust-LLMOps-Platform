@@ -33,36 +33,57 @@
     },
     {
       "id": 3,
-      "title": "CPU Utilization",
+      "title": "CPU utilization — pod / host (%)",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        }
+      },
       "targets": [
         {
-          "expr": "rate(process_cpu_seconds_total{deployment_id=\"$deployment_id\", user_id=\"$user_id\"}[5m])",
-          "legendFormat": "CPU"
+          "expr": "100 * llmops_hardware_cpu_utilization{deployment_id=\"$deployment_id\", user_id=\"$user_id\"}",
+          "legendFormat": "CPU (pod or host)"
         }
       ]
     },
     {
       "id": 4,
-      "title": "Memory (bytes)",
+      "title": "Memory utilization (%)",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        }
+      },
       "targets": [
         {
-          "expr": "process_resident_memory_bytes{deployment_id=\"$deployment_id\", user_id=\"$user_id\"}",
-          "legendFormat": "RSS"
+          "expr": "100 * llmops_hardware_memory_utilization{deployment_id=\"$deployment_id\", user_id=\"$user_id\"}",
+          "legendFormat": "Memory"
         }
       ]
     },
     {
       "id": 5,
-      "title": "GPU Utilization",
+      "title": "GPU utilization (%)",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        }
+      },
       "targets": [
         {
-          "expr": "gpu_utilization{deployment_id=\"$deployment_id\", user_id=\"$user_id\"}",
+          "expr": "100 * llmops_hardware_gpu_utilization{deployment_id=\"$deployment_id\", user_id=\"$user_id\"}",
           "legendFormat": "GPU"
         }
       ]

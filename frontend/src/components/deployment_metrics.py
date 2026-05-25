@@ -10,7 +10,7 @@ from src.services.api_client import APIError, get_deployment_metrics, get_grafan
 from src.services.session_client import get_session_token
 
 
-def _series_to_df(points: list[dict[str, Any]]) -> pd.DataFrame | None:
+def _series_to_df(points: list[dict[str, Any]], *, y_label: str = "value") -> pd.DataFrame | None:
     if not points:
         return None
     df = pd.DataFrame(points)
@@ -18,7 +18,8 @@ def _series_to_df(points: list[dict[str, Any]]) -> pd.DataFrame | None:
         return None
     df["timestamp"] = pd.to_datetime(df["timestamp"])
     df = df.set_index("timestamp").sort_index()
-    return df[["value"]]
+    df = df.rename(columns={"value": y_label})
+    return df[[y_label]]
 
 
 def render_deployment_metrics_panel(deployment_id: str, hardware_type: str) -> None:
@@ -85,9 +86,9 @@ def render_deployment_metrics_panel(deployment_id: str, hardware_type: str) -> N
             st.line_chart(throughput_df)
 
         hardware = series.get("hardware") or {}
-        _render_hardware_chart(hardware.get("cpu_utilization"), "CPU utilization", deployment_id, "cpu")
-        _render_hardware_chart(hardware.get("memory_utilization"), "Memory utilization", deployment_id, "mem")
-        _render_hardware_chart(hardware.get("gpu_utilization"), "GPU utilization", deployment_id, "gpu")
+        _render_hardware_chart(hardware.get("cpu_utilization"), deployment_id, "cpu")
+        _render_hardware_chart(hardware.get("memory_utilization"), deployment_id, "mem")
+        _render_hardware_chart(hardware.get("gpu_utilization"), deployment_id, "gpu")
 
         if st.button("Open in Grafana", key=f"grafana_{deployment_id}"):
             try:
@@ -100,19 +101,33 @@ def render_deployment_metrics_panel(deployment_id: str, hardware_type: str) -> N
                 st.error(f"Could not open Grafana: {exc.detail}")
 
 
+def _hardware_chart_title(hw_series: dict[str, Any], fallback: str) -> str:
+    label = hw_series.get("label") or fallback
+    unit = hw_series.get("unit")
+    if unit == "percent":
+        return f"{label} (%)"
+    return label
+
+
 def _render_hardware_chart(
     hw_series: dict[str, Any] | None,
-    title: str,
     deployment_id: str,
     suffix: str,
 ) -> None:
     if not hw_series:
         return
+    fallback_titles = {
+        "cpu": "CPU utilization",
+        "mem": "Memory utilization",
+        "gpu": "GPU utilization",
+    }
+    title = _hardware_chart_title(hw_series, fallback_titles.get(suffix, "Hardware"))
     if not hw_series.get("available"):
         reason = hw_series.get("reason") or "not available"
         st.markdown(f"**{title}**: N/A ({reason.replace('_', ' ')})")
         return
-    df = _series_to_df(hw_series.get("series") or [])
+    y_label = "%" if hw_series.get("unit") == "percent" else "value"
+    df = _series_to_df(hw_series.get("series") or [], y_label=y_label)
     if df is not None:
         st.markdown(f"**{title}**")
         st.line_chart(df)

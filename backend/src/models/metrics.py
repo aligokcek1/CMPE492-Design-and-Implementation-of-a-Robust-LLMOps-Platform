@@ -21,6 +21,8 @@ class MetricPoint(BaseModel):
 class HardwareSeries(BaseModel):
     available: bool
     reason: str | None = None
+    unit: str | None = None
+    label: str | None = None
     series: list[MetricPoint] = Field(default_factory=list)
 
 

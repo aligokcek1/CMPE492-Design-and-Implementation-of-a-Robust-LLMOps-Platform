@@ -26,6 +26,26 @@ _ADD_COLUMN_MIGRATIONS: tuple[tuple[str, str, str], ...] = (
         "model_origin",
         "ALTER TABLE deployments ADD COLUMN model_origin TEXT NOT NULL DEFAULT 'public'",
     ),
+    (
+        "deployments",
+        "lightning_teamspace_id",
+        "ALTER TABLE deployments ADD COLUMN lightning_teamspace_id TEXT",
+    ),
+    (
+        "deployments",
+        "lightning_deployment_uuid",
+        "ALTER TABLE deployments ADD COLUMN lightning_deployment_uuid TEXT",
+    ),
+    (
+        "deployments",
+        "k8s_namespace",
+        "ALTER TABLE deployments ADD COLUMN k8s_namespace TEXT",
+    ),
+    (
+        "deployments",
+        "k8s_pod_label",
+        "ALTER TABLE deployments ADD COLUMN k8s_pod_label TEXT",
+    ),
 )
 
 

@@ -18,6 +18,7 @@ export LLMOPS_GRAFANA_URL="http://localhost:3000"
 export LLMOPS_GRAFANA_ADMIN_USER="admin"
 export LLMOPS_GRAFANA_ADMIN_PASSWORD="admin"
 export LLMOPS_GRAFANA_LINK_TTL_SECONDS="900"   # 15 minutes
+export LLMOPS_PROMETHEUS_RELOAD_URL="http://localhost:9090/-/reload"
 
 # Disable monitoring provisioning in unit tests (set automatically in conftest)
 # export LLMOPS_METRICS_DISABLED=1
@@ -47,7 +48,7 @@ pip install -e ".[dev]"          # picks up prometheus-client
 uvicorn src.main:app --reload
 ```
 
-The backend exposes proxy metrics at `GET /metrics` and registers per-deployment scrape jobs when deployments reach `running`.
+The backend exposes proxy metrics at `GET /metrics` and polls Lightning AI / GKE Metrics API every 15s for hardware gauges (`llmops_hardware_*`).
 
 ---
 
@@ -73,7 +74,7 @@ Open http://localhost:8501.
 6. Confirm you see:
    - **TTFT** summary + trend chart
    - **Throughput** summary + trend chart
-   - **Hardware** charts (CPU/memory for CPU; GPU may show N/A for Lightning AI)
+   - **Hardware** charts (CPU/memory from GKE pod metrics for CPU; GPU util/VRAM from Lightning AI API for GPU)
 7. Click **Open in Grafana** → browser opens signed redirect → Grafana dashboard scoped to that deployment.
 
 ---

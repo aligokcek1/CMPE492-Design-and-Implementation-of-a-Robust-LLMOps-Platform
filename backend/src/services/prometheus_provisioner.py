@@ -5,7 +5,6 @@ import logging
 import os
 from pathlib import Path
 from typing import Protocol
-from urllib.parse import urlparse
 
 import httpx
 
@@ -25,13 +24,6 @@ class PrometheusProvisioner(Protocol):
     ) -> str: ...
 
     async def decommission_scrape_job(self, *, scrape_job: str) -> None: ...
-
-
-def _endpoint_host_port(endpoint_url: str) -> str:
-    parsed = urlparse(endpoint_url)
-    host = parsed.hostname or "localhost"
-    port = parsed.port or (443 if parsed.scheme == "https" else 80)
-    return f"{host}:{port}"
 
 
 class FilePrometheusProvisioner:
@@ -60,21 +52,9 @@ class FilePrometheusProvisioner:
         hardware_type: str,
         endpoint_url: str,
     ) -> str:
+        """Return a stable job name; hardware metrics come from the backend poller."""
+        _ = (user_id, hardware_type, endpoint_url)
         scrape_job = self._job_name(deployment_id)
-        target = _endpoint_host_port(endpoint_url)
-        content = (
-            "scrape_configs:\n"
-            f"  - job_name: {scrape_job}\n"
-            "    metrics_path: /metrics\n"
-            "    static_configs:\n"
-            f"      - targets: ['{target}']\n"
-            "        labels:\n"
-            f"          deployment_id: '{deployment_id}'\n"
-            f"          user_id: '{user_id}'\n"
-            f"          hardware_type: '{hardware_type}'\n"
-        )
-        self._scrape_dir.mkdir(parents=True, exist_ok=True)
-        self._job_path(scrape_job).write_text(content, encoding="utf-8")
         await self._reload_if_configured()
         return scrape_job
 
