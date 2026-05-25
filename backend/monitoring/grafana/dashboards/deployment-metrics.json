@@ -1,0 +1,106 @@
+{
+  "uid": "deployment-metrics-template",
+  "title": "LLMOps Deployment Metrics",
+  "tags": ["llmops", "deployment"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "TTFT (seconds)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(llmops_ttft_seconds_bucket{deployment_id=\"$deployment_id\", user_id=\"$user_id\"}[5m])) by (le))",
+          "legendFormat": "p95 TTFT"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Throughput (tokens/s)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(llmops_tokens_total{deployment_id=\"$deployment_id\", user_id=\"$user_id\"}[5m]))",
+          "legendFormat": "tokens/s"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "CPU utilization — pod / host (%)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        }
+      },
+      "targets": [
+        {
+          "expr": "100 * llmops_hardware_cpu_utilization{deployment_id=\"$deployment_id\", user_id=\"$user_id\"}",
+          "legendFormat": "CPU (pod or host)"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Memory utilization (%)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        }
+      },
+      "targets": [
+        {
+          "expr": "100 * llmops_hardware_memory_utilization{deployment_id=\"$deployment_id\", user_id=\"$user_id\"}",
+          "legendFormat": "Memory"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "GPU utilization (%)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        }
+      },
+      "targets": [
+        {
+          "expr": "100 * llmops_hardware_gpu_utilization{deployment_id=\"$deployment_id\", user_id=\"$user_id\"}",
+          "legendFormat": "GPU"
+        }
+      ]
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "deployment_id",
+        "type": "textbox",
+        "hide": 2
+      },
+      {
+        "name": "user_id",
+        "type": "textbox",
+        "hide": 2
+      }
+    ]
+  }
+}

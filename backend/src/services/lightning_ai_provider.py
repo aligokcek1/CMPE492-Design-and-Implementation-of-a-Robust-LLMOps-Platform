@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import os
 import threading
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Protocol, runtime_checkable
 
 # Process-global lock: the lightning_sdk reads LIGHTNING_USER_ID /
@@ -45,6 +47,13 @@ class LightningAINotFoundError(Exception):
         self.message = message
 
 
+@dataclass(frozen=True)
+class LightningSystemMetrics:
+    cpu_utilization: float | None = None
+    memory_utilization: float | None = None
+    gpu_utilization: float | None = None
+
+
 @runtime_checkable
 class LightningAIProvider(Protocol):
     async def validate_api_key(self, *, api_key: str, lightning_user_id: str) -> None:
@@ -53,15 +62,24 @@ class LightningAIProvider(Protocol):
 
     async def deploy(
         self, *, hf_model_id: str, api_key: str, lightning_user_id: str, hf_token: str = ""
-    ) -> tuple[str, str | None]:
+    ) -> tuple[str, str | None, str | None, str | None]:
         """Submit a vLLM deployment on Lightning AI.
 
-        *hf_token* is injected as the ``HF_TOKEN`` environment variable in the
-        deployment container so it can pull private and gated HF models.
-
-        Returns (deployment_name, endpoint_url_or_None).
-        The endpoint URL is None while the GPU node is still starting.
+        Returns (deployment_name, endpoint_url_or_None, teamspace_id, deployment_uuid).
         """
+        ...
+
+    async def get_system_metrics(
+        self,
+        *,
+        teamspace_id: str,
+        deployment_uuid: str,
+        api_key: str,
+        lightning_user_id: str,
+        start: datetime,
+        end: datetime,
+    ) -> LightningSystemMetrics | None:
+        """Fetch recent CPU/GPU hardware metrics from the Lightning control plane."""
         ...
 
     async def get_status(
@@ -185,14 +203,14 @@ class RealLightningAIProvider:
 
     async def deploy(
         self, *, hf_model_id: str, api_key: str, lightning_user_id: str, hf_token: str = ""
-    ) -> tuple[str, str | None]:
+    ) -> tuple[str, str | None, str | None, str | None]:
         import asyncio
 
         return await asyncio.to_thread(self._sync_deploy, hf_model_id, api_key, lightning_user_id, hf_token)
 
     def _sync_deploy(
         self, hf_model_id: str, api_key: str, lightning_user_id: str, hf_token: str = ""
-    ) -> tuple[str, str | None]:
+    ) -> tuple[str, str | None, str | None, str | None]:
         with _env_lock:
             saved = _set_lightning_env(lightning_user_id, api_key)
             try:
@@ -223,7 +241,10 @@ class RealLightningAIProvider:
 
                 urls = dep.urls
                 endpoint_url = urls[0] if urls else None
-                return dep._name, endpoint_url  # noqa: SLF001
+                internal = dep._deployment  # noqa: SLF001
+                teamspace_id = internal.project_id if internal is not None else dep._teamspace.id  # noqa: SLF001
+                deployment_uuid = internal.id if internal is not None else None
+                return dep._name, endpoint_url, teamspace_id, deployment_uuid  # noqa: SLF001
 
             except LightningAIAuthError:
                 raise
@@ -239,6 +260,81 @@ class RealLightningAIProvider:
                         "https://lightning.ai/settings."
                     ) from exc
                 raise LightningAIServiceError(f"Lightning AI deploy failed: {msg}") from exc
+            finally:
+                _restore_lightning_env(saved)
+
+    async def get_system_metrics(
+        self,
+        *,
+        teamspace_id: str,
+        deployment_uuid: str,
+        api_key: str,
+        lightning_user_id: str,
+        start: datetime,
+        end: datetime,
+    ) -> LightningSystemMetrics | None:
+        import asyncio
+
+        return await asyncio.to_thread(
+            self._sync_get_system_metrics,
+            teamspace_id,
+            deployment_uuid,
+            api_key,
+            lightning_user_id,
+            start,
+            end,
+        )
+
+    def _sync_get_system_metrics(
+        self,
+        teamspace_id: str,
+        deployment_uuid: str,
+        api_key: str,
+        lightning_user_id: str,
+        start: datetime,
+        end: datetime,
+    ) -> LightningSystemMetrics | None:
+        with _env_lock:
+            saved = _set_lightning_env(lightning_user_id, api_key)
+            try:
+                from lightning_sdk.lightning_cloud.rest_client import (
+                    LightningClient,  # type: ignore[import]
+                )
+
+                client = LightningClient(retry=False)
+                job_ids = _list_lightning_job_ids(
+                    client,
+                    teamspace_id=teamspace_id,
+                    deployment_uuid=deployment_uuid,
+                )
+                query_kwargs: dict = {
+                    "project_id": teamspace_id,
+                    "deployment_id": deployment_uuid,
+                    "start": start,
+                    "end": end,
+                }
+                if job_ids:
+                    query_kwargs["ids"] = job_ids
+
+                response = client.jobs_service_get_job_system_metrics(**query_kwargs)
+                metrics = _parse_lightning_system_metrics(response)
+                if metrics is not None:
+                    return metrics
+
+                # Widen the window — Lightning may lag a few minutes behind live state.
+                if (end - start).total_seconds() < 3600:
+                    wider = dict(query_kwargs)
+                    wider["start"] = end - timedelta(hours=1)
+                    response = client.jobs_service_get_job_system_metrics(**wider)
+                    return _parse_lightning_system_metrics(response)
+                return None
+            except Exception as exc:
+                msg = str(exc)
+                if _is_auth_error(msg):
+                    raise LightningAIAuthError(msg) from exc
+                raise LightningAIServiceError(
+                    f"Lightning AI system metrics fetch failed: {msg}"
+                ) from exc
             finally:
                 _restore_lightning_env(saved)
 
@@ -343,6 +439,83 @@ class RealLightningAIProvider:
                 _restore_lightning_env(saved)
 
 
+def _list_lightning_job_ids(
+    client: object,
+    *,
+    teamspace_id: str,
+    deployment_uuid: str,
+) -> list[str]:
+    """Return running replica job IDs for a deployment."""
+    try:
+        response = client.jobs_service_list_jobs(  # type: ignore[attr-defined]
+            project_id=teamspace_id,
+            deployment_id=deployment_uuid,
+            state="running",
+            limit=10,
+        )
+    except Exception:
+        return []
+    jobs = getattr(response, "jobs", None) or []
+    return [job.id for job in jobs if getattr(job, "id", None)]
+
+
+def _parse_lightning_system_metrics(response: object) -> LightningSystemMetrics | None:
+    system_metrics = getattr(response, "system_metrics", None) or {}
+    if not system_metrics:
+        return None
+    latest = None
+    for metrics_list in system_metrics.values():
+        entries = getattr(metrics_list, "metrics", None) or []
+        for entry in entries:
+            if latest is None:
+                latest = entry
+                continue
+            entry_ts = getattr(entry, "timestamp", None)
+            latest_ts = getattr(latest, "timestamp", None)
+            if entry_ts is not None and latest_ts is not None and entry_ts > latest_ts:
+                latest = entry
+    if latest is None:
+        return None
+
+    cpu_util: float | None = None
+    memory_util: float | None = None
+    gpu_util: float | None = None
+
+    cpu = getattr(latest, "cpu", None)
+    if cpu is not None:
+        pct = getattr(cpu, "percentage", None)
+        if pct is not None:
+            cpu_util = float(pct) / 100.0
+
+    gpus = getattr(latest, "gpu", None) or []
+    if gpus:
+        first_gpu = gpus[0]
+        util = getattr(first_gpu, "utilisation", None)
+        if util is not None:
+            gpu_util = float(util) / 100.0
+        memory_util = _gpu_memory_utilization(first_gpu)
+
+    if cpu_util is None and memory_util is None and gpu_util is None:
+        return None
+    return LightningSystemMetrics(
+        cpu_utilization=cpu_util,
+        memory_utilization=memory_util,
+        gpu_utilization=gpu_util,
+    )
+
+
+def _gpu_memory_utilization(gpu: object) -> float | None:
+    """Return GPU VRAM used/total as a 0-1 ratio."""
+    mem_total = getattr(gpu, "memory_total", None)
+    mem_used = getattr(gpu, "memory_used", None)
+    if mem_total is not None and int(mem_total) > 0 and mem_used is not None:
+        return min(float(mem_used) / float(mem_total), 1.0)
+    mem_pct = getattr(gpu, "utilisation_memory", None)
+    if mem_pct is not None:
+        return min(float(mem_pct) / 100.0, 1.0)
+    return None
+
+
 _real_provider = RealLightningAIProvider()
 
 
@@ -356,5 +529,6 @@ __all__ = [
     "LightningAIAuthError",
     "LightningAIServiceError",
     "LightningAINotFoundError",
+    "LightningSystemMetrics",
     "get_real_provider",
 ]

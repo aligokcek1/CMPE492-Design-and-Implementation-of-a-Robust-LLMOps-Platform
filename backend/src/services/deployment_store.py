@@ -135,6 +135,8 @@ class DeploymentStore:
         *,
         deployment_id: str,
         lightning_ai_deployment_id: str,
+        lightning_teamspace_id: str | None = None,
+        lightning_deployment_uuid: str | None = None,
     ) -> None:
         session_factory = get_session_factory()
         with session_factory() as db:
@@ -144,6 +146,29 @@ class DeploymentStore:
             if row is None:
                 return
             row.lightning_ai_deployment_id = lightning_ai_deployment_id
+            if lightning_teamspace_id is not None:
+                row.lightning_teamspace_id = lightning_teamspace_id
+            if lightning_deployment_uuid is not None:
+                row.lightning_deployment_uuid = lightning_deployment_uuid
+            row.updated_at = datetime.now(UTC)
+            db.commit()
+
+    def store_k8s_workload(
+        self,
+        *,
+        deployment_id: str,
+        k8s_namespace: str,
+        k8s_pod_label: str,
+    ) -> None:
+        session_factory = get_session_factory()
+        with session_factory() as db:
+            row = db.execute(
+                select(DeploymentRow).where(DeploymentRow.id == deployment_id)
+            ).scalar_one_or_none()
+            if row is None:
+                return
+            row.k8s_namespace = k8s_namespace
+            row.k8s_pod_label = k8s_pod_label
             row.updated_at = datetime.now(UTC)
             db.commit()
 
@@ -218,6 +243,16 @@ class DeploymentStore:
                     DeploymentRow.status.in_(("running", "deploying"))
                 )
             ).scalars().all())
+            for row in rows:
+                db.expunge(row)
+            return rows
+
+    def list_by_status(self, status: str) -> list[DeploymentRow]:
+        session_factory = get_session_factory()
+        with session_factory() as db:
+            rows = list(
+                db.execute(select(DeploymentRow).where(DeploymentRow.status == status)).scalars().all()
+            )
             for row in rows:
                 db.expunge(row)
             return rows

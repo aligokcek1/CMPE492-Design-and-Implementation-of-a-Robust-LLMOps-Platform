@@ -1,0 +1,286 @@
+openapi: 3.0.3
+info:
+  title: LLMOps Platform — Feature 010 (Deployment Metrics Monitoring)
+  version: "0.1.0"
+  description: |
+    New HTTP endpoints for deployment metrics and Grafana signed deep links.
+    All authenticated endpoints require an active platform session (feature 006).
+    PromQL is never exposed to clients — the backend queries Prometheus server-side.
+
+servers:
+  - url: http://localhost:8000
+
+components:
+  securitySchemes:
+    PlatformSession:
+      type: apiKey
+      in: cookie
+      name: llmops_session
+
+  schemas:
+
+    MetricsRange:
+      type: string
+      enum: [1h, 24h, 7d]
+      default: 1h
+
+    MetricPoint:
+      type: object
+      required: [timestamp, value]
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        value:
+          type: number
+          format: double
+
+    HardwareSeries:
+      type: object
+      required: [available]
+      properties:
+        available:
+          type: boolean
+        reason:
+          type: string
+          nullable: true
+          description: Human-readable reason when available=false (e.g. not_available_for_this_deployment_type)
+        series:
+          type: array
+          items:
+            $ref: "#/components/schemas/MetricPoint"
+
+    MetricsSummary:
+      type: object
+      required: [throughput_unit, failed_requests_excluded]
+      properties:
+        ttft_avg_seconds:
+          type: number
+          format: double
+          nullable: true
+        ttft_p95_seconds:
+          type: number
+          format: double
+          nullable: true
+        throughput_value:
+          type: number
+          format: double
+          nullable: true
+        throughput_unit:
+          type: string
+          enum: [tokens_per_second, requests_per_second]
+        failed_requests_excluded:
+          type: boolean
+          default: true
+
+    MetricsSeriesBundle:
+      type: object
+      required: [ttft, throughput, hardware]
+      properties:
+        ttft:
+          type: array
+          items:
+            $ref: "#/components/schemas/MetricPoint"
+        throughput:
+          type: array
+          items:
+            $ref: "#/components/schemas/MetricPoint"
+        hardware:
+          type: object
+          required: [cpu_utilization, memory_utilization, gpu_utilization]
+          properties:
+            cpu_utilization:
+              $ref: "#/components/schemas/HardwareSeries"
+            memory_utilization:
+              $ref: "#/components/schemas/HardwareSeries"
+            gpu_utilization:
+              $ref: "#/components/schemas/HardwareSeries"
+
+    DeploymentMetricsResponse:
+      type: object
+      required:
+        - deployment_id
+        - hardware_type
+        - platform_label
+        - range
+        - summary
+        - series
+        - empty
+      properties:
+        deployment_id:
+          type: string
+          format: uuid
+        hardware_type:
+          type: string
+          enum: [cpu, gpu]
+        platform_label:
+          type: string
+          example: "GKE / TGI"
+        range:
+          $ref: "#/components/schemas/MetricsRange"
+        summary:
+          $ref: "#/components/schemas/MetricsSummary"
+        series:
+          $ref: "#/components/schemas/MetricsSeriesBundle"
+        empty:
+          type: boolean
+          description: True when no inference traffic occurred in the selected range
+        error:
+          type: string
+          nullable: true
+          description: Populated when Prometheus is unreachable (FR-011)
+
+    GrafanaLinkResponse:
+      type: object
+      required: [redirect_url, expires_at]
+      properties:
+        redirect_url:
+          type: string
+          format: uri
+          description: |
+            Backend signed redirect URL. Client opens this in a new tab;
+            backend validates HMAC token then 302s to Grafana dashboard.
+        expires_at:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          oneOf:
+            - type: string
+            - type: object
+
+paths:
+
+  /api/deployments/{deployment_id}/metrics:
+    get:
+      operationId: getDeploymentMetrics
+      summary: Get deployment metrics for in-platform charts
+      description: |
+        Returns TTFT, throughput, and hardware utilization for a **running**
+        deployment owned by the authenticated user. Used by the Streamlit
+        Deployments metrics panel (hybrid UX — not Grafana iframe).
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: deployment_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: range
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/MetricsRange"
+      responses:
+        "200":
+          description: Metrics payload for charts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeploymentMetricsResponse"
+        "403":
+          description: Deployment belongs to another user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Deployment not found, not running, or monitoring not provisioned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Prometheus unreachable — error field may also be set in 200 for graceful degradation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/deployments/{deployment_id}/metrics/grafana:
+    get:
+      operationId: getDeploymentGrafanaLink
+      summary: Mint signed Grafana deep link
+      description: |
+        Returns a time-limited signed redirect URL for the deployment's
+        pre-provisioned Grafana dashboard. Only available for **running**
+        deployments with active monitoring.
+      security:
+        - PlatformSession: []
+      parameters:
+        - name: deployment_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Signed redirect URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GrafanaLinkResponse"
+        "403":
+          description: Deployment belongs to another user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Deployment not found, not running, deleted, or monitoring not provisioned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/metrics/grafana/redirect:
+    get:
+      operationId: grafanaRedirect
+      summary: Validate signed token and redirect to Grafana
+      description: |
+        Public endpoint (no session cookie). Validates HMAC token containing
+        deployment_id, user_id, and expiry. On success, responds 302 to the
+        scoped Grafana dashboard. On failure, 403.
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to Grafana dashboard
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+        "403":
+          description: Token expired, tampered, or unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /metrics:
+    get:
+      operationId: getBackendPrometheusMetrics
+      summary: Backend Prometheus scrape endpoint
+      description: |
+        Standard prometheus_client exposition format for proxy-emitted metrics
+        (llmops_ttft_seconds, llmops_tokens_total, etc.). Scraped by platform
+        Prometheus alongside per-deployment upstream targets.
+      responses:
+        "200":
+          description: Prometheus text exposition format
+          content:
+            text/plain:
+              schema:
+                type: string

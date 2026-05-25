@@ -92,8 +92,13 @@ class DeploymentRow(Base):
     gcp_project_id: Mapped[str | None] = mapped_column(String, nullable=True, unique=True)
     gke_cluster_name: Mapped[str | None] = mapped_column(String, nullable=True)
     gke_region: Mapped[str | None] = mapped_column(String, nullable=True)
-    # Lightning AI field — null for CPU rows.
+    # Lightning AI fields — null for CPU rows.
     lightning_ai_deployment_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    lightning_teamspace_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    lightning_deployment_uuid: Mapped[str | None] = mapped_column(String, nullable=True)
+    # GKE workload identity for Metrics API polling — null for GPU rows.
+    k8s_namespace: Mapped[str | None] = mapped_column(String, nullable=True)
+    k8s_pod_label: Mapped[str | None] = mapped_column(String, nullable=True)
     model_origin: Mapped[str] = mapped_column(String, nullable=False, default="public")
     status: Mapped[str] = mapped_column(String, nullable=False, default="queued")
     status_message: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -101,6 +106,31 @@ class DeploymentRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+MONITORING_STATUSES = ("active", "decommissioning")
+
+
+class DeploymentMonitoringRow(Base):
+    __tablename__ = "deployment_monitoring"
+    __table_args__ = (
+        CheckConstraint(
+            f"status IN {MONITORING_STATUSES}",
+            name="ck_deployment_monitoring_status",
+        ),
+        Index("ix_deployment_monitoring_user_id", "user_id"),
+    )
+
+    deployment_id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(String, nullable=False)
+    prometheus_scrape_job: Mapped[str] = mapped_column(String, nullable=False)
+    grafana_datasource_uid: Mapped[str] = mapped_column(String, nullable=False)
+    grafana_dashboard_uid: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="active")
+    provisioned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
+    decommission_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
 
 
 class LightningAICredentialsRow(Base):
@@ -129,9 +159,11 @@ class LightningAICredentialsRow(Base):
 __all__ = [
     "GCPCredentialsRow",
     "DeploymentRow",
+    "DeploymentMonitoringRow",
     "LightningAICredentialsRow",
     "VALIDATION_STATUSES",
     "HARDWARE_TYPES",
     "DEPLOYMENT_STATUSES",
     "MODEL_ORIGINS",
+    "MONITORING_STATUSES",
 ]
